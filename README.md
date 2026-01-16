@@ -1,0 +1,137 @@
+# 通学路安全確認デモアプリ
+
+小学生の通学路における安全教育支援デモアプリケーションです。
+保護者が子どもと一緒に通学路上の危険箇所を確認し、Street View バーチャルツアーで視覚的に学習できます。
+
+## デモサイト
+
+**URL**: https://map-demo-eight.vercel.app
+
+**QR コード**:
+
+![QR Code](public/qrcode.png)
+
+## 主な機能
+
+### 地図・経路機能
+- OpenStreetMap による地図表示
+- クリックで経由地点を設定
+- OSRM API による歩行者向けルート計算
+- 経路上の危険地点を自動検出
+
+### 危険地点表示
+- 4種類の危険タイプをアイコンで表示
+  - 見通しの悪い交差点
+  - 事故多発エリア
+  - 急ブレーキ多発地点
+  - ユーザー投稿情報
+- 危険地点をクリックで詳細表示
+
+### Street View バーチャルツアー
+- 経路に沿った Street View 自動再生
+- 再生/一時停止/前進/後退コントロール
+- 危険地点接近時の自動一時停止
+- 速度調整機能
+
+### 安全学習ガイド
+- 危険地点ごとのチェックポイント
+- 声かけ例・安全行動のヒント
+- 危険タイプ別の解説
+
+### レスポンシブ対応
+- デスクトップ/モバイル両対応
+- モバイルではタブ切り替え UI
+
+## 技術スタック
+
+| 技術 | バージョン | 用途 |
+|------|-----------|------|
+| Next.js | 14.x (App Router) | フレームワーク |
+| TypeScript | 5.x | 型安全性 |
+| Tailwind CSS | 3.x | スタイリング |
+| shadcn/ui | latest | UI コンポーネント |
+| Leaflet + react-leaflet | 1.9.x / 4.x | 地図表示（OSM） |
+| Vitest | latest | テスト |
+
+## 外部サービス
+
+| サービス | 用途 |
+|---------|------|
+| OpenStreetMap (OSM) | 地図タイル |
+| OSRM | 歩行者向けルーティング |
+| Google Street View API | パノラマ画像表示 |
+
+## セットアップ
+
+### 1. 依存関係のインストール
+
+```bash
+npm install
+```
+
+### 2. 環境変数の設定
+
+`.env.example` を `.env.local` にコピーして、Google Maps API キーを設定:
+
+```bash
+cp .env.example .env.local
+```
+
+`.env.local`:
+```
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+```
+
+### 3. 開発サーバーの起動
+
+```bash
+npm run dev
+```
+
+http://localhost:3000 でアプリが起動します。
+
+## コマンド
+
+```bash
+# 開発サーバー起動
+npm run dev
+
+# ビルド
+npm run build
+
+# テスト実行
+npm run test
+
+# Lint
+npm run lint
+```
+
+## 使い方
+
+1. **経路を設定**: 地図をクリックして出発地点と目的地を設定
+2. **ルートを計算**: 「ルートを計算」ボタンをクリック
+3. **危険地点を確認**: 経路上の危険マーカーをクリックして詳細を確認
+4. **ツアーを開始**: 「再生」ボタンでバーチャルツアーを開始
+5. **安全を学習**: 危険地点で自動停止し、安全ガイドを確認
+
+## サンプルデータ地域
+
+- 栃木県宇都宮市周辺（緯度: 36.55付近、経度: 139.89付近）
+
+## 注意事項
+
+- Google Street View API の利用には API キーが必要です
+- Street View のカバレッジは全道路で利用可能ではありません
+- OSRM 公開デモサーバーには利用制限があります
+- オンライン接続が必須です
+
+## ライセンス
+
+MIT
+
+## 参考
+
+- [Honda Safety Map](https://safetymap.jp/)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Leaflet Documentation](https://leafletjs.com/)
+- [Google Street View API](https://developers.google.com/maps/documentation/streetview)
