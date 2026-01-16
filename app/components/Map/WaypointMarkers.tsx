@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { Marker, Popup, Polyline } from "react-leaflet";
 import L from "leaflet";
 import { Waypoint } from "@/lib/types";
 
-const LONG_PRESS_DURATION = 500; // ミリ秒
+const LONG_PRESS_DURATION = 600; // ミリ秒（少し長めに）
+const MOVE_THRESHOLD = 10; // ピクセル（この範囲内の移動は許容）
 
 // 経由地点タイプ別のアイコン
 const createWaypointIcon = (type: Waypoint["type"], index?: number) => {
@@ -64,6 +65,8 @@ export function WaypointMarkers({
 }: WaypointMarkersProps) {
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pressedIdRef = useRef<string | null>(null);
+  const startPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isLongPressTriggeredRef = useRef(false);
 
   const getTypeLabel = (type: Waypoint["type"]) => {
     switch (type) {
@@ -76,30 +79,48 @@ export function WaypointMarkers({
     }
   };
 
-  const handleMouseDown = useCallback((id: string) => {
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    pressedIdRef.current = null;
+    startPosRef.current = null;
+  }, []);
+
+  const handlePressStart = useCallback((id: string, clientX?: number, clientY?: number) => {
+    // 既存のタイマーをクリア
+    clearLongPressTimer();
+
     pressedIdRef.current = id;
+    isLongPressTriggeredRef.current = false;
+    startPosRef.current = clientX !== undefined && clientY !== undefined
+      ? { x: clientX, y: clientY }
+      : null;
+
     longPressTimerRef.current = setTimeout(() => {
-      if (pressedIdRef.current === id) {
+      if (pressedIdRef.current === id && !isLongPressTriggeredRef.current) {
+        isLongPressTriggeredRef.current = true;
         onDelete(id);
+        clearLongPressTimer();
       }
     }, LONG_PRESS_DURATION);
-  }, [onDelete]);
+  }, [onDelete, clearLongPressTimer]);
 
-  const handleMouseUp = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
+  const handlePressMove = useCallback((clientX: number, clientY: number) => {
+    // 移動距離が閾値を超えたらキャンセル
+    if (startPosRef.current && longPressTimerRef.current) {
+      const dx = Math.abs(clientX - startPosRef.current.x);
+      const dy = Math.abs(clientY - startPosRef.current.y);
+      if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+        clearLongPressTimer();
+      }
     }
-    pressedIdRef.current = null;
-  }, []);
+  }, [clearLongPressTimer]);
 
-  const handleMouseLeave = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    pressedIdRef.current = null;
-  }, []);
+  const handlePressEnd = useCallback(() => {
+    clearLongPressTimer();
+  }, [clearLongPressTimer]);
 
   // ドラッグ終了時のハンドラ
   const handleDragEnd = useCallback(
@@ -146,16 +167,37 @@ export function WaypointMarkers({
           draggable={isDraggable && !isDrawingRoute}
           eventHandlers={{
             // デスクトップ用
-            mousedown: () => handleMouseDown(waypoint.id),
-            mouseup: handleMouseUp,
-            mouseout: handleMouseLeave,
+            mousedown: (e) => {
+              const event = e.originalEvent as MouseEvent;
+              handlePressStart(waypoint.id, event.clientX, event.clientY);
+            },
+            mouseup: handlePressEnd,
+            mouseout: handlePressEnd,
+            mousemove: (e) => {
+              const event = e.originalEvent as MouseEvent;
+              handlePressMove(event.clientX, event.clientY);
+            },
+            dragstart: handlePressEnd, // ドラッグ開始時は長押しキャンセル
             dragend: (e) => handleDragEnd(waypoint.id, e),
-            // モバイル用（タッチイベント）- Leaflet内部でサポートされている
+            // モバイル用（タッチイベント）
             ...({
-              touchstart: () => handleMouseDown(waypoint.id),
-              touchend: handleMouseUp,
-              touchcancel: handleMouseLeave,
-            } as Record<string, () => void>),
+              touchstart: (e: L.LeafletMouseEvent) => {
+                const originalEvent = e.originalEvent as unknown as TouchEvent;
+                const touch = originalEvent?.touches?.[0];
+                if (touch) {
+                  handlePressStart(waypoint.id, touch.clientX, touch.clientY);
+                }
+              },
+              touchmove: (e: L.LeafletMouseEvent) => {
+                const originalEvent = e.originalEvent as unknown as TouchEvent;
+                const touch = originalEvent?.touches?.[0];
+                if (touch) {
+                  handlePressMove(touch.clientX, touch.clientY);
+                }
+              },
+              touchend: handlePressEnd,
+              touchcancel: handlePressEnd,
+            } as Record<string, (e: L.LeafletMouseEvent) => void>),
           }}
         >
           <Popup>
