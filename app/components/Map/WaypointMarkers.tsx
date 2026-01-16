@@ -149,11 +149,13 @@ export function WaypointMarkers({
             mousedown: () => handleMouseDown(waypoint.id),
             mouseup: handleMouseUp,
             mouseout: handleMouseLeave,
-            // モバイル用（タッチイベント）
-            touchstart: () => handleMouseDown(waypoint.id),
-            touchend: handleMouseUp,
-            touchcancel: handleMouseLeave,
             dragend: (e) => handleDragEnd(waypoint.id, e),
+            // モバイル用（タッチイベント）- Leaflet内部でサポートされている
+            ...({
+              touchstart: () => handleMouseDown(waypoint.id),
+              touchend: handleMouseUp,
+              touchcancel: handleMouseLeave,
+            } as Record<string, () => void>),
           }}
         >
           <Popup>
