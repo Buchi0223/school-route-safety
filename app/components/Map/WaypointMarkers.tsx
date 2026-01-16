@@ -145,9 +145,14 @@ export function WaypointMarkers({
           icon={createWaypointIcon(waypoint.type, viaIndexMap.get(waypoint.id))}
           draggable={isDraggable && !isDrawingRoute}
           eventHandlers={{
+            // デスクトップ用
             mousedown: () => handleMouseDown(waypoint.id),
             mouseup: handleMouseUp,
             mouseout: handleMouseLeave,
+            // モバイル用（タッチイベント）
+            touchstart: () => handleMouseDown(waypoint.id),
+            touchend: handleMouseUp,
+            touchcancel: handleMouseLeave,
             dragend: (e) => handleDragEnd(waypoint.id, e),
           }}
         >

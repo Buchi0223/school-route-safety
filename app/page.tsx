@@ -3,6 +3,10 @@
 import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { RouteControls, TourControls, MobileViewTabs, MobileViewTab } from "./components/Controls";
+import { MobileHeader, MenuTab } from "./components/Mobile/MobileHeader";
+import { Overlay } from "./components/Mobile/Overlay";
+import { RouteSearchOverlay } from "./components/Mobile/RouteSearchOverlay";
+import { useOverlay } from "@/lib/useOverlay";
 import { StreetViewPanel } from "./components/StreetView";
 import { SafetyGuideOverlay, SafetyGuidePanel } from "./components/Guide";
 import { Waypoint, HazardPoint } from "@/lib/types";
@@ -48,6 +52,11 @@ export default function Home() {
 
   // モバイル用タブ状態
   const [mobileActiveTab, setMobileActiveTab] = useState<MobileViewTab>("map");
+
+  // モバイル用新UI状態
+  const [mobileMenuTab, setMobileMenuTab] = useState<MenuTab>("route");
+  const routeOverlay = useOverlay(false);
+  const helpOverlay = useOverlay(false);
 
   // ツアーフック
   const tour = useTour({
@@ -274,6 +283,27 @@ export default function Home() {
     setSelectedHazard(null);
   }, []);
 
+  // モバイルメニュータブ変更ハンドラ
+  const handleMobileMenuTabChange = useCallback((tab: MenuTab) => {
+    setMobileMenuTab(tab);
+    // タブに応じてオーバーレイを開く
+    if (tab === "route") {
+      routeOverlay.open();
+      helpOverlay.close();
+      // 経路検索時は自動で描画モードを有効化
+      setIsDrawingRoute(true);
+    } else if (tab === "help") {
+      helpOverlay.open();
+      routeOverlay.close();
+      setIsDrawingRoute(false);
+    } else if (tab === "explore") {
+      // 探検モードは Phase 4 で実装
+      routeOverlay.close();
+      helpOverlay.close();
+      setIsDrawingRoute(false);
+    }
+  }, [routeOverlay, helpOverlay]);
+
   return (
     <main className="h-screen flex flex-col">
       {/* ヘッダー */}
@@ -360,10 +390,16 @@ export default function Home() {
         </div>
       </div>
 
-      {/* モバイル: タブ切り替えレイアウト */}
-      <div className="flex-1 flex flex-col lg:hidden overflow-hidden pb-14">
-        {/* 地図タブ */}
-        <div className={`flex-1 relative ${mobileActiveTab === "map" ? "block" : "hidden"}`}>
+      {/* モバイル: 新UIレイアウト */}
+      <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
+        {/* 新しいモバイルヘッダーメニュー */}
+        <MobileHeader
+          activeTab={mobileMenuTab}
+          onTabChange={handleMobileMenuTabChange}
+        />
+
+        {/* 地図（フルスクリーン） */}
+        <div className="flex-1 relative">
           <MapContainer
             waypoints={waypoints}
             onWaypointAdd={handleWaypointAdd}
@@ -386,66 +422,65 @@ export default function Home() {
               onClose={handleCloseGuide}
             />
           </MapContainer>
-
-          {/* 経路設定コントロール（地図上に重ねる） */}
-          <div className="absolute top-2 left-2 right-2 z-[1000] space-y-2">
-            <RouteControls
-              waypoints={waypoints}
-              isDrawingRoute={isDrawingRoute}
-              onStartDrawing={() => setIsDrawingRoute(true)}
-              onStopDrawing={() => setIsDrawingRoute(false)}
-              onClearWaypoints={handleClearWaypoints}
-              onCalculateRoute={handleCalculateRoute}
-              isCalculatingRoute={isCalculatingRoute}
-              routeDistance={routeDistance}
-            />
-            {/* ツアーコントロール */}
-            <TourControls
-              status={tour.status}
-              progress={tour.progress}
-              speed={tour.speed}
-              isReady={tour.isReady}
-              nearbyHazard={tour.nearbyHazard}
-              onPlay={tour.play}
-              onPause={tour.pause}
-              onStop={tour.stop}
-              onForward={tour.forward}
-              onBackward={tour.backward}
-              onSpeedChange={tour.setSpeed}
-              onProgressChange={tour.goToIndex}
-              totalPoints={tour.tourPoints.length}
-              currentIndex={tour.currentIndex}
-            />
-          </div>
         </div>
 
-        {/* Street Viewタブ */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-gray-50 ${mobileActiveTab === "streetview" ? "block" : "hidden"}`}>
-          <div className="flex-1 p-2 min-h-0">
-            <StreetViewPanel
-              selectedHazard={selectedHazard}
-              apiKey={googleMapsApiKey}
-              tourPosition={tourPosition}
-              tourHeading={tourHeading}
-              isTourActive={isTourActive}
-            />
-          </div>
-        </div>
+        {/* 経路検索オーバーレイ */}
+        <RouteSearchOverlay
+          isOpen={routeOverlay.isOpen}
+          onClose={() => {
+            routeOverlay.close();
+            setIsDrawingRoute(false);
+          }}
+          waypoints={waypoints}
+          isDrawingRoute={isDrawingRoute}
+          onStartDrawing={() => setIsDrawingRoute(true)}
+          onStopDrawing={() => setIsDrawingRoute(false)}
+          onClearWaypoints={handleClearWaypoints}
+          onCalculateRoute={handleCalculateRoute}
+          isCalculatingRoute={isCalculatingRoute}
+          routeDistance={routeDistance}
+        />
 
-        {/* ガイドタブ */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-gray-50 ${mobileActiveTab === "guide" ? "block" : "hidden"}`}>
-          <div className="flex-1 p-2 min-h-0 overflow-auto">
-            <SafetyGuidePanel selectedHazard={selectedHazard} />
+        {/* ヘルプオーバーレイ（アイコン説明） */}
+        <Overlay
+          isOpen={helpOverlay.isOpen}
+          onClose={helpOverlay.close}
+          title="アイコン説明"
+        >
+          <div className="p-4 space-y-4">
+            <div>
+              <h3 className="font-bold text-gray-800 mb-2">危険地点の種類</h3>
+              <ul className="space-y-2">
+                <li className="flex items-center gap-2">
+                  <span className="text-xl">⚠️</span>
+                  <span className="text-sm">見通しの悪い交差点</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-xl">🔴</span>
+                  <span className="text-sm">事故多発エリア</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-xl">🟠</span>
+                  <span className="text-sm">急ブレーキ多発地点</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-xl">💬</span>
+                  <span className="text-sm">ユーザー投稿情報</span>
+                </li>
+              </ul>
+            </div>
+            <hr className="border-gray-200" />
+            <div>
+              <h3 className="font-bold text-gray-800 mb-2">操作方法</h3>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>・地図をタップして経路のスタート/ゴールを設定</li>
+                <li>・危険マーカーをタップして詳細を確認</li>
+                <li>・「通学路探検」で一緒に安全学習</li>
+              </ul>
+            </div>
           </div>
-        </div>
+        </Overlay>
       </div>
-
-      {/* モバイル用タブバー */}
-      <MobileViewTabs
-        activeTab={mobileActiveTab}
-        onTabChange={setMobileActiveTab}
-        hasSelectedHazard={!!selectedHazard}
-      />
     </main>
   );
 }

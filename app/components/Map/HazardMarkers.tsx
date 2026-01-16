@@ -38,12 +38,15 @@ interface HazardMarkersProps {
   hazardPoints: HazardPoint[];
   onHazardClick: (hazard: HazardPoint) => void;
   selectedHazardId: string | null;
+  /** クリックを無効にする（経路描画中など） */
+  disabled?: boolean;
 }
 
 export function HazardMarkers({
   hazardPoints,
   onHazardClick,
   selectedHazardId,
+  disabled = false,
 }: HazardMarkersProps) {
   return (
     <>
@@ -56,31 +59,38 @@ export function HazardMarkers({
             key={hazard.id}
             position={[hazard.lat, hazard.lng]}
             icon={createHazardIcon(hazard.type, isSelected)}
-            eventHandlers={{
-              click: () => onHazardClick(hazard),
-            }}
+            eventHandlers={
+              disabled
+                ? {}
+                : {
+                    click: () => onHazardClick(hazard),
+                  }
+            }
           >
-            <Popup>
-              <div className="text-sm max-w-xs">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xl">{info.icon}</span>
-                  <span
-                    className="px-2 py-0.5 rounded text-xs text-white"
-                    style={{ backgroundColor: info.color }}
+            {/* disabled時はPopupを表示しない */}
+            {!disabled && (
+              <Popup>
+                <div className="text-sm max-w-xs">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">{info.icon}</span>
+                    <span
+                      className="px-2 py-0.5 rounded text-xs text-white"
+                      style={{ backgroundColor: info.color }}
+                    >
+                      {info.label}
+                    </span>
+                  </div>
+                  <p className="font-bold text-base mb-1">{hazard.title}</p>
+                  <p className="text-gray-600 mb-2">{hazard.description}</p>
+                  <button
+                    onClick={() => onHazardClick(hazard)}
+                    className="w-full px-3 py-1.5 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
                   >
-                    {info.label}
-                  </span>
+                    Street Viewで確認
+                  </button>
                 </div>
-                <p className="font-bold text-base mb-1">{hazard.title}</p>
-                <p className="text-gray-600 mb-2">{hazard.description}</p>
-                <button
-                  onClick={() => onHazardClick(hazard)}
-                  className="w-full px-3 py-1.5 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-                >
-                  Street Viewで確認
-                </button>
-              </div>
-            </Popup>
+              </Popup>
+            )}
           </Marker>
         );
       })}

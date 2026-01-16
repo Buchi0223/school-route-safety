@@ -150,6 +150,7 @@ export default function MapContainerComponent({
           hazardPoints={hazardPoints}
           onHazardClick={onHazardClick}
           selectedHazardId={selectedHazardId}
+          disabled={isDrawingRoute}
         />
         {/* ツアー中の現在位置マーカー */}
         {isTourActive && tourPosition && (
