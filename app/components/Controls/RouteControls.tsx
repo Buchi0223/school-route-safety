@@ -136,7 +136,7 @@ export function RouteControls({
             <ul className="space-y-0.5 text-blue-700">
               <li>• クリック: 地点を追加（最初=出発、途中=経由）</li>
               <li>• ダブルクリック: 目的地を設定して終了</li>
-              <li>• マーカー長押し: 地点を削除</li>
+              <li>• マーカーをクリック → 移動/削除ボタンで操作</li>
             </ul>
           </div>
         )}

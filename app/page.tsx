@@ -6,7 +6,10 @@ import { RouteControls, TourControls, MobileViewTabs, MobileViewTab } from "./co
 import { MobileHeader, MenuTab } from "./components/Mobile/MobileHeader";
 import { Overlay } from "./components/Mobile/Overlay";
 import { RouteSearchOverlay } from "./components/Mobile/RouteSearchOverlay";
+import { HelpOverlay } from "./components/Mobile/HelpOverlay";
+import { ExplorationMode } from "./components/Mobile/ExplorationMode";
 import { useOverlay } from "@/lib/useOverlay";
+import { useExplorationMode } from "@/lib/useExplorationMode";
 import { StreetViewPanel } from "./components/StreetView";
 import { SafetyGuideOverlay, SafetyGuidePanel } from "./components/Guide";
 import { Waypoint, HazardPoint } from "@/lib/types";
@@ -58,7 +61,15 @@ export default function Home() {
   const routeOverlay = useOverlay(false);
   const helpOverlay = useOverlay(false);
 
-  // ツアーフック
+  // 探検モード
+  const exploration = useExplorationMode();
+  const [explorationWaypoints, setExplorationWaypoints] = useState<Waypoint[]>([]);
+  const [isExplorationDrawingRoute, setIsExplorationDrawingRoute] = useState(false);
+  const [explorationRouteCoordinates, setExplorationRouteCoordinates] = useState<[number, number][] | null>(null);
+  const [explorationTourHeading, setExplorationTourHeading] = useState(0);
+  const [explorationRouteDistance, setExplorationRouteDistance] = useState(0);
+
+  // 通常のツアーフック
   const tour = useTour({
     routeCoordinates,
     hazardPoints: displayedHazards,
@@ -74,6 +85,23 @@ export default function Home() {
     },
   });
 
+  // 探検モード用ツアーフック
+  const explorationTour = useTour({
+    routeCoordinates: explorationRouteCoordinates,
+    hazardPoints: displayedHazards,
+    onPositionChange: (position, heading) => {
+      setTourPosition(position);
+      setExplorationTourHeading(heading);
+    },
+    onHazardApproach: (hazard) => {
+      setSelectedHazard(hazard);
+      exploration.stopAtHazard();
+    },
+    onTourEnd: () => {
+      exploration.completeTour();
+    },
+  });
+
   const isTourActive = tour.status === "playing" || tour.status === "paused";
 
   // 危険地点データを読み込み
@@ -84,8 +112,46 @@ export default function Home() {
     });
   }, []);
 
+  // 探検モードで経路が設定されたら自動で経路計算
+  useEffect(() => {
+    const hasStart = explorationWaypoints.some((wp) => wp.type === "start");
+    const hasEnd = explorationWaypoints.some((wp) => wp.type === "end");
+
+    if (exploration.state === "route_setting" && hasStart && hasEnd) {
+      // 経路計算
+      const calculateExplorationRoute = async () => {
+        const orderedWaypoints = sortWaypointsByRoute(explorationWaypoints);
+        try {
+          const route = await getWalkingRoute(orderedWaypoints);
+          if (route) {
+            setExplorationRouteCoordinates(route);
+          }
+        } catch (error) {
+          console.error("Exploration route calculation failed:", error);
+        }
+      };
+      calculateExplorationRoute();
+    }
+  }, [explorationWaypoints, exploration.state]);
+
   // 地点追加ハンドラ（連続クリック用）
   const handleWaypointAdd = useCallback((lat: number, lng: number) => {
+    // 探検モードの経路設定中
+    if (exploration.state === "route_setting" && isExplorationDrawingRoute) {
+      const hasStart = explorationWaypoints.some((wp) => wp.type === "start");
+      const type: Waypoint["type"] = hasStart ? "via" : "start";
+
+      const newWaypoint: Waypoint = {
+        id: `exp-${Date.now()}`,
+        lat,
+        lng,
+        type,
+      };
+
+      setExplorationWaypoints((prev) => [...prev, newWaypoint]);
+      return;
+    }
+
     const hasStart = waypoints.some((wp) => wp.type === "start");
 
     // 最初のクリックは出発地点、以降は経由地点
@@ -102,10 +168,36 @@ export default function Home() {
     // ルートをリセット
     setRouteCoordinates(null);
     setRouteDistance(null);
-  }, [waypoints]);
+  }, [waypoints, exploration.state, isExplorationDrawingRoute, explorationWaypoints]);
 
   // ダブルクリックでゴール設定
   const handleWaypointDoubleClick = useCallback((lat: number, lng: number) => {
+    // 探検モードの経路設定中
+    if (exploration.state === "route_setting" && isExplorationDrawingRoute) {
+      const hasStart = explorationWaypoints.some((wp) => wp.type === "start");
+
+      if (!hasStart) {
+        const newWaypoint: Waypoint = {
+          id: `exp-${Date.now()}`,
+          lat,
+          lng,
+          type: "start",
+        };
+        setExplorationWaypoints((prev) => [...prev, newWaypoint]);
+      } else {
+        const newWaypoint: Waypoint = {
+          id: `exp-${Date.now()}`,
+          lat,
+          lng,
+          type: "end",
+        };
+        setExplorationWaypoints((prev) => [...prev, newWaypoint]);
+      }
+      // 描画モードを終了
+      setIsExplorationDrawingRoute(false);
+      return;
+    }
+
     const hasStart = waypoints.some((wp) => wp.type === "start");
 
     if (!hasStart) {
@@ -132,18 +224,30 @@ export default function Home() {
     setIsDrawingRoute(false);
     setRouteCoordinates(null);
     setRouteDistance(null);
-  }, [waypoints]);
+  }, [waypoints, exploration.state, isExplorationDrawingRoute, explorationWaypoints]);
 
   // 地点削除ハンドラ
   const handleWaypointDelete = useCallback((id: string) => {
+    // 探検モードの場合
+    if (exploration.state === "route_setting" && id.startsWith("exp-")) {
+      setExplorationWaypoints((prev) => prev.filter((wp) => wp.id !== id));
+      return;
+    }
     setWaypoints((prev) => prev.filter((wp) => wp.id !== id));
     setRouteCoordinates(null);
     setRouteDistance(null);
-  }, []);
+  }, [exploration.state]);
 
   // 地点移動ハンドラ（ドラッグ後）
   const handleWaypointMove = useCallback(
     (id: string, lat: number, lng: number) => {
+      // 探検モードの場合
+      if (exploration.state === "route_setting" && id.startsWith("exp-")) {
+        setExplorationWaypoints((prev) =>
+          prev.map((wp) => (wp.id === id ? { ...wp, lat, lng } : wp))
+        );
+        return;
+      }
       setWaypoints((prev) =>
         prev.map((wp) => (wp.id === id ? { ...wp, lat, lng } : wp))
       );
@@ -151,7 +255,7 @@ export default function Home() {
       setRouteCoordinates(null);
       setRouteDistance(null);
     },
-    []
+    [exploration.state]
   );
 
   // 経路ドラッグハンドラ（経由地点を置換または追加して再計算）
@@ -290,19 +394,92 @@ export default function Home() {
     if (tab === "route") {
       routeOverlay.open();
       helpOverlay.close();
+      exploration.exitExploration();
+      setExplorationWaypoints([]);
+      setIsExplorationDrawingRoute(false);
       // 経路検索時は自動で描画モードを有効化
       setIsDrawingRoute(true);
     } else if (tab === "help") {
       helpOverlay.open();
       routeOverlay.close();
+      exploration.exitExploration();
+      setExplorationWaypoints([]);
+      setIsExplorationDrawingRoute(false);
       setIsDrawingRoute(false);
     } else if (tab === "explore") {
-      // 探検モードは Phase 4 で実装
+      // 探検モードを開始
       routeOverlay.close();
       helpOverlay.close();
       setIsDrawingRoute(false);
+      exploration.startExploration();
+      setExplorationWaypoints([]);
+      setIsExplorationDrawingRoute(true); // 探検モード開始時は描画モードを有効化
     }
-  }, [routeOverlay, helpOverlay]);
+  }, [routeOverlay, helpOverlay, exploration]);
+
+  // 探検モードのツアー開始
+  const handleExplorationStartTour = useCallback(async () => {
+    // 経路を計算
+    const startPoint = explorationWaypoints.find((wp) => wp.type === "start");
+    const endPoint = explorationWaypoints.find((wp) => wp.type === "end");
+
+    if (!startPoint || !endPoint) return;
+
+    const orderedWaypoints = sortWaypointsByRoute(explorationWaypoints);
+
+    try {
+      const route = await getWalkingRoute(orderedWaypoints);
+      if (route) {
+        setExplorationRouteCoordinates(route);
+        // 経路距離を計算
+        setExplorationRouteDistance(calculateRouteDistance(route));
+        // ツアー開始
+        exploration.startTour();
+        // 少し待ってからツアー再生を開始（ルートが初期化されるまで待つ）
+        setTimeout(() => {
+          explorationTour.play();
+        }, 500);
+      }
+    } catch (error) {
+      console.error("Route calculation failed:", error);
+    }
+  }, [explorationWaypoints, exploration, explorationTour]);
+
+  // 探検モードの終了
+  const handleExplorationExit = useCallback(() => {
+    exploration.exitExploration();
+    explorationTour.stop();
+    setExplorationWaypoints([]);
+    setIsExplorationDrawingRoute(false);
+    setExplorationRouteCoordinates(null);
+  }, [exploration, explorationTour]);
+
+  // 探検モードのツアー終了（TourScreenの終了ボタン）
+  const handleExplorationExitTour = useCallback(() => {
+    explorationTour.stop();
+    exploration.startExploration(); // 経路設定画面に戻る
+    setExplorationRouteCoordinates(null);
+  }, [exploration, explorationTour]);
+
+  // 探検モード：危険地点からツアー再開
+  const handleResumeFromHazard = useCallback(() => {
+    exploration.resumeTour();
+    explorationTour.play();
+  }, [exploration, explorationTour]);
+
+  // 探検モード：もう一度探検する
+  const handleExplorationRetry = useCallback(() => {
+    explorationTour.stop();
+    exploration.resetExploration();
+    setExplorationWaypoints([]);
+    setExplorationRouteCoordinates(null);
+    setExplorationRouteDistance(0);
+    setIsExplorationDrawingRoute(true);
+  }, [exploration, explorationTour]);
+
+  // 探検モードのゴール設定状態をチェック
+  const explorationHasValidRoute = explorationWaypoints.some((wp) => wp.type === "start") &&
+    explorationWaypoints.some((wp) => wp.type === "end");
 
   return (
     <main className="h-screen flex flex-col">
@@ -401,13 +578,13 @@ export default function Home() {
         {/* 地図（フルスクリーン） */}
         <div className="flex-1 relative">
           <MapContainer
-            waypoints={waypoints}
+            waypoints={exploration.state === "route_setting" ? explorationWaypoints : waypoints}
             onWaypointAdd={handleWaypointAdd}
             onWaypointDoubleClick={handleWaypointDoubleClick}
             onWaypointDelete={handleWaypointDelete}
             onWaypointMove={handleWaypointMove}
-            isDrawingRoute={isDrawingRoute}
-            routeCoordinates={routeCoordinates}
+            isDrawingRoute={isDrawingRoute || isExplorationDrawingRoute}
+            routeCoordinates={exploration.state === "route_setting" ? explorationRouteCoordinates : routeCoordinates}
             onRouteDrag={handleRouteDrag}
             hazardPoints={displayedHazards}
             onHazardClick={handleHazardClick}
@@ -416,11 +593,13 @@ export default function Home() {
             tourHeading={tourHeading}
             isTourActive={isTourActive}
           >
-            {/* 安全ガイドオーバーレイ（モバイルでも地図上に表示） */}
-            <SafetyGuideOverlay
-              selectedHazard={selectedHazard}
-              onClose={handleCloseGuide}
-            />
+            {/* 安全ガイドオーバーレイ（モバイルでも地図上に表示、ただし探検モードツアー中は非表示） */}
+            {!(exploration.state === "touring" || exploration.state === "hazard_stop") && (
+              <SafetyGuideOverlay
+                selectedHazard={selectedHazard}
+                onClose={handleCloseGuide}
+              />
+            )}
           </MapContainer>
         </div>
 
@@ -442,44 +621,43 @@ export default function Home() {
         />
 
         {/* ヘルプオーバーレイ（アイコン説明） */}
-        <Overlay
+        <HelpOverlay
           isOpen={helpOverlay.isOpen}
           onClose={helpOverlay.close}
-          title="アイコン説明"
-        >
-          <div className="p-4 space-y-4">
-            <div>
-              <h3 className="font-bold text-gray-800 mb-2">危険地点の種類</h3>
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2">
-                  <span className="text-xl">⚠️</span>
-                  <span className="text-sm">見通しの悪い交差点</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-xl">🔴</span>
-                  <span className="text-sm">事故多発エリア</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-xl">🟠</span>
-                  <span className="text-sm">急ブレーキ多発地点</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-xl">💬</span>
-                  <span className="text-sm">ユーザー投稿情報</span>
-                </li>
-              </ul>
-            </div>
-            <hr className="border-gray-200" />
-            <div>
-              <h3 className="font-bold text-gray-800 mb-2">操作方法</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li>・地図をタップして経路のスタート/ゴールを設定</li>
-                <li>・危険マーカーをタップして詳細を確認</li>
-                <li>・「通学路探検」で一緒に安全学習</li>
-              </ul>
-            </div>
-          </div>
-        </Overlay>
+        />
+
+        {/* 探検モード */}
+        {exploration.isActive && (
+          <ExplorationMode
+            state={exploration.state}
+            hasValidRoute={explorationHasValidRoute}
+            onStartTour={handleExplorationStartTour}
+            onExit={handleExplorationExit}
+            // ツアー用プロパティ
+            apiKey={googleMapsApiKey}
+            routeCoordinates={explorationRouteCoordinates || []}
+            hazardPoints={displayedHazards}
+            tourPoints={explorationTour.tourPoints}
+            currentIndex={explorationTour.currentIndex}
+            currentPosition={explorationTour.currentPosition}
+            heading={explorationTourHeading}
+            progress={explorationTour.progress}
+            speed={explorationTour.speed}
+            isPlaying={explorationTour.status === "playing"}
+            nearbyHazard={explorationTour.nearbyHazard}
+            onPlay={explorationTour.play}
+            onPause={explorationTour.pause}
+            onForward={explorationTour.forward}
+            onBackward={explorationTour.backward}
+            onSpeedChange={explorationTour.setSpeed}
+            onGoToIndex={explorationTour.goToIndex}
+            onExitTour={handleExplorationExitTour}
+            onResumeFromHazard={handleResumeFromHazard}
+            // 完了画面用プロパティ
+            routeDistance={explorationRouteDistance}
+            onRetry={handleExplorationRetry}
+          />
+        )}
       </div>
     </main>
   );

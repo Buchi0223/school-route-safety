@@ -36,9 +36,10 @@ interface MapClickHandlerProps {
   onMapClick: (lat: number, lng: number) => void;
   onMapDoubleClick: (lat: number, lng: number) => void;
   isDrawingRoute: boolean;
+  isMovingWaypoint: boolean;
 }
 
-function MapClickHandler({ onMapClick, onMapDoubleClick, isDrawingRoute }: MapClickHandlerProps) {
+function MapClickHandler({ onMapClick, onMapDoubleClick, isDrawingRoute, isMovingWaypoint }: MapClickHandlerProps) {
   const map = useMap();
 
   useEffect(() => {
@@ -51,12 +52,14 @@ function MapClickHandler({ onMapClick, onMapDoubleClick, isDrawingRoute }: MapCl
 
   useMapEvents({
     click: (e) => {
-      if (isDrawingRoute) {
+      // 移動モード中は新規ノード追加をしない
+      if (isDrawingRoute && !isMovingWaypoint) {
         onMapClick(e.latlng.lat, e.latlng.lng);
       }
     },
     dblclick: (e) => {
-      if (isDrawingRoute) {
+      // 移動モード中はダブルクリックも無視
+      if (isDrawingRoute && !isMovingWaypoint) {
         e.originalEvent.preventDefault();
         onMapDoubleClick(e.latlng.lat, e.latlng.lng);
       }
@@ -102,6 +105,7 @@ export default function MapContainerComponent({
   children,
 }: MapContainerComponentProps) {
   const [isClient, setIsClient] = useState(false);
+  const [isMovingWaypoint, setIsMovingWaypoint] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -131,13 +135,15 @@ export default function MapContainerComponent({
           onMapClick={onWaypointAdd}
           onMapDoubleClick={onWaypointDoubleClick}
           isDrawingRoute={isDrawingRoute}
+          isMovingWaypoint={isMovingWaypoint}
         />
         <WaypointMarkers
           waypoints={waypoints}
           onDelete={onWaypointDelete}
           onMove={onWaypointMove}
           isDrawingRoute={isDrawingRoute}
-          isDraggable={!isTourActive}
+          isMovingWaypoint={isMovingWaypoint}
+          onMovingWaypointChange={setIsMovingWaypoint}
         />
         {routeCoordinates && (
           <RouteLayer

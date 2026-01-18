@@ -20,7 +20,7 @@ const createWaypointIcon = (type: Waypoint["type"], index?: number, isMoving?: b
   };
 
   const baseColor = colors[type];
-  const borderColor = isMoving ? "#FBBF24" : "white"; // 移動中は黄色ボーダー
+  const borderColor = isMoving ? "#FBBF24" : "white";
   const borderWidth = isMoving ? "3px" : "2px";
 
   return L.divIcon({
@@ -55,7 +55,8 @@ interface WaypointMarkersProps {
   onDelete: (id: string) => void;
   onMove: (id: string, lat: number, lng: number) => void;
   isDrawingRoute: boolean;
-  isDraggable?: boolean;
+  isMovingWaypoint?: boolean; // 親コンポーネントとの同期用（将来使用予定）
+  onMovingWaypointChange: (isMoving: boolean) => void;
 }
 
 // 移動モード用のマップクリックハンドラ
@@ -81,9 +82,10 @@ export function WaypointMarkers({
   onDelete,
   onMove,
   isDrawingRoute,
-  isDraggable = true,
+  onMovingWaypointChange,
 }: WaypointMarkersProps) {
   const [movingWaypointId, setMovingWaypointId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const popupRefs = useRef<Map<string, L.Popup>>(new Map());
 
   const getTypeLabel = (type: Waypoint["type"]) => {
@@ -98,8 +100,13 @@ export function WaypointMarkers({
   };
 
   // 削除ボタンクリック
-  const handleDelete = useCallback((id: string) => {
-    // ポップアップを閉じる
+  const handleDelete = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setIsDeleting(true);
+    setTimeout(() => setIsDeleting(false), 100);
+
     const popup = popupRefs.current.get(id);
     if (popup) {
       popup.close();
@@ -108,48 +115,44 @@ export function WaypointMarkers({
   }, [onDelete]);
 
   // 移動ボタンクリック
-  const handleStartMove = useCallback((id: string) => {
-    // ポップアップを閉じる
+  const handleStartMove = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     const popup = popupRefs.current.get(id);
     if (popup) {
       popup.close();
     }
     setMovingWaypointId(id);
-  }, []);
+    onMovingWaypointChange(true);
+  }, [onMovingWaypointChange]);
 
   // 地図クリックで移動完了
   const handleMapClick = useCallback((lat: number, lng: number) => {
-    if (movingWaypointId) {
+    if (movingWaypointId && !isDeleting) {
       onMove(movingWaypointId, lat, lng);
       setMovingWaypointId(null);
+      onMovingWaypointChange(false);
     }
-  }, [movingWaypointId, onMove]);
+  }, [movingWaypointId, isDeleting, onMove, onMovingWaypointChange]);
 
-  // 移動キャンセル（ESCキーやマーカー再クリック）
+  // 移動キャンセル
   const handleCancelMove = useCallback(() => {
     setMovingWaypointId(null);
-  }, []);
+    onMovingWaypointChange(false);
+  }, [onMovingWaypointChange]);
 
   // ESCキーで移動モードをキャンセル
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && movingWaypointId) {
         setMovingWaypointId(null);
+        onMovingWaypointChange(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [movingWaypointId]);
-
-  // ドラッグ終了時のハンドラ（デスクトップ用）
-  const handleDragEnd = useCallback(
-    (id: string, e: L.DragEndEvent) => {
-      const marker = e.target as L.Marker;
-      const position = marker.getLatLng();
-      onMove(id, position.lat, position.lng);
-    },
-    [onMove]
-  );
+  }, [movingWaypointId, onMovingWaypointChange]);
 
   // 経由地点のインデックスを計算
   const viaIndexMap = new Map<string, number>();
@@ -160,7 +163,7 @@ export function WaypointMarkers({
     }
   });
 
-  // 経由地点間を結ぶ線（ルート計算前の仮線）
+  // 経由地点間を結ぶ線
   const waypointPositions: [number, number][] = waypoints.map((wp) => [wp.lat, wp.lng]);
 
   return (
@@ -199,7 +202,7 @@ export function WaypointMarkers({
             fontSize: "14px",
           }}
         >
-          地図をタップして移動先を選択
+          地図をクリックして移動先を選択
           <button
             onClick={handleCancelMove}
             style={{
@@ -225,46 +228,60 @@ export function WaypointMarkers({
             key={waypoint.id}
             position={[waypoint.lat, waypoint.lng]}
             icon={createWaypointIcon(waypoint.type, viaIndexMap.get(waypoint.id), isMoving)}
-            draggable={isDraggable && !isDrawingRoute && !movingWaypointId}
             eventHandlers={{
-              dragend: (e) => handleDragEnd(waypoint.id, e),
-              click: () => {
-                // 移動モード中に同じマーカーをクリックしたらキャンセル
+              click: (e) => {
                 if (movingWaypointId === waypoint.id) {
                   handleCancelMove();
+                }
+                // 経路描画中はポップアップを開かない
+                if (isDrawingRoute) {
+                  e.target.closePopup();
                 }
               },
             }}
           >
-            <Popup
-              ref={(popup) => {
-                if (popup) {
-                  popupRefs.current.set(waypoint.id, popup);
-                }
-              }}
-            >
-              <div className="text-sm min-w-[140px]">
-                <p className="font-bold text-center mb-2">{getTypeLabel(waypoint.type)}</p>
-                {waypoint.label && <p className="text-center mb-2">{waypoint.label}</p>}
-                <p className="text-gray-500 text-xs text-center mb-3">
-                  {waypoint.lat.toFixed(5)}, {waypoint.lng.toFixed(5)}
-                </p>
-                <div className="flex gap-2 justify-center">
-                  <button
-                    onClick={() => handleStartMove(waypoint.id)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium"
-                  >
-                    移動
-                  </button>
-                  <button
-                    onClick={() => handleDelete(waypoint.id)}
-                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium"
-                  >
-                    削除
-                  </button>
+            {/* 経路描画中はポップアップを表示しない */}
+            {!isDrawingRoute && (
+              <Popup
+                ref={(popup) => {
+                  if (popup) {
+                    popupRefs.current.set(waypoint.id, popup);
+                  }
+                }}
+              >
+                <div className="text-sm min-w-[140px]">
+                  <p className="font-bold text-center mb-2">{getTypeLabel(waypoint.type)}</p>
+                  {waypoint.label && <p className="text-center mb-2">{waypoint.label}</p>}
+                  <p className="text-gray-500 text-xs text-center mb-3">
+                    {waypoint.lat.toFixed(5)}, {waypoint.lng.toFixed(5)}
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      onClick={(e) => handleStartMove(e, waypoint.id)}
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleStartMove(e as unknown as React.MouseEvent, waypoint.id);
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium"
+                    >
+                      移動
+                    </button>
+                    <button
+                      onClick={(e) => handleDelete(e, waypoint.id)}
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDelete(e as unknown as React.MouseEvent, waypoint.id);
+                      }}
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium"
+                    >
+                      削除
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </Popup>
+              </Popup>
+            )}
           </Marker>
         );
       })}
