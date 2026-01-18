@@ -188,20 +188,20 @@ export const HazardStopScreen = memo(function HazardStopScreen({
           />
         </div>
 
-        {/* キャラクターと吹き出し (右下) */}
-        <div className="absolute bottom-28 right-4 pointer-events-auto z-10">
+        {/* キャラクターと吹き出し (左下 - Googleロゴの上) */}
+        <div className="absolute bottom-8 left-2 pointer-events-auto z-10">
           <CharacterBubble
             key={speechIndex} // セリフが変わるたびにアニメーションをリセット
             message={currentSpeech.message}
             subMessage={currentSpeech.subMessage}
             onTap={handleSpeechTap}
             showTapIndicator={true}
-            position="right"
+            position="left"
           />
         </div>
 
         {/* 進行状況インジケーター */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+        <div className="absolute bottom-2 right-4 flex gap-2">
           {SPEECH_SEQUENCE.map((_, index) => (
             <div
               key={index}
