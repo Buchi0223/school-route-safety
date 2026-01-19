@@ -229,59 +229,53 @@ export function WaypointMarkers({
             position={[waypoint.lat, waypoint.lng]}
             icon={createWaypointIcon(waypoint.type, viaIndexMap.get(waypoint.id), isMoving)}
             eventHandlers={{
-              click: (e) => {
+              click: () => {
                 if (movingWaypointId === waypoint.id) {
                   handleCancelMove();
-                }
-                // 経路描画中はポップアップを開かない
-                if (isDrawingRoute) {
-                  e.target.closePopup();
                 }
               },
             }}
           >
-            {/* 経路描画中はポップアップを表示しない */}
-            {!isDrawingRoute && (
-              <Popup
-                ref={(popup) => {
-                  if (popup) {
-                    popupRefs.current.set(waypoint.id, popup);
-                  }
-                }}
-              >
-                <div className="text-sm min-w-[140px]">
-                  <p className="font-bold text-center mb-2">{getTypeLabel(waypoint.type)}</p>
-                  {waypoint.label && <p className="text-center mb-2">{waypoint.label}</p>}
-                  <p className="text-gray-500 text-xs text-center mb-3">
-                    {waypoint.lat.toFixed(5)}, {waypoint.lng.toFixed(5)}
-                  </p>
-                  <div className="flex gap-2 justify-center">
-                    <button
-                      onClick={(e) => handleStartMove(e, waypoint.id)}
-                      onTouchEnd={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleStartMove(e as unknown as React.MouseEvent, waypoint.id);
-                      }}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium"
-                    >
-                      移動
-                    </button>
-                    <button
-                      onClick={(e) => handleDelete(e, waypoint.id)}
-                      onTouchEnd={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDelete(e as unknown as React.MouseEvent, waypoint.id);
-                      }}
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium"
-                    >
-                      削除
-                    </button>
-                  </div>
+            {/* ポップアップ（常に表示可能） */}
+            <Popup
+              ref={(popup) => {
+                if (popup) {
+                  popupRefs.current.set(waypoint.id, popup);
+                }
+              }}
+            >
+              <div className="text-sm min-w-[140px]">
+                <p className="font-bold text-center mb-2">{getTypeLabel(waypoint.type)}</p>
+                {waypoint.label && <p className="text-center mb-2">{waypoint.label}</p>}
+                <p className="text-gray-500 text-xs text-center mb-3">
+                  {waypoint.lat.toFixed(5)}, {waypoint.lng.toFixed(5)}
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={(e) => handleStartMove(e, waypoint.id)}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleStartMove(e as unknown as React.MouseEvent, waypoint.id);
+                    }}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium"
+                  >
+                    移動
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(e, waypoint.id)}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDelete(e as unknown as React.MouseEvent, waypoint.id);
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium"
+                  >
+                    削除
+                  </button>
                 </div>
-              </Popup>
-            )}
+              </div>
+            </Popup>
           </Marker>
         );
       })}

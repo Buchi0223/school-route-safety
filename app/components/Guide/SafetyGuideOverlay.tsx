@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, MessageCircle, Lightbulb, X, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, MessageCircle, Lightbulb, X, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { HazardPoint, HAZARD_TYPE_INFO } from "@/lib/types";
 
 interface SafetyGuideOverlayProps {
   selectedHazard: HazardPoint | null;
   onClose: () => void;
+  onShowStreetView?: (hazard: HazardPoint) => void;
 }
 
-export function SafetyGuideOverlay({ selectedHazard, onClose }: SafetyGuideOverlayProps) {
+export function SafetyGuideOverlay({ selectedHazard, onClose, onShowStreetView }: SafetyGuideOverlayProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   if (!selectedHazard) return null;
@@ -104,6 +105,18 @@ export function SafetyGuideOverlay({ selectedHazard, onClose }: SafetyGuideOverl
                 ))}
               </div>
             </div>
+
+            {/* Street Viewボタン */}
+            {onShowStreetView && (
+              <Button
+                onClick={() => onShowStreetView(selectedHazard)}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+                size="sm"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Street Viewで確認
+              </Button>
+            )}
           </CardContent>
         )}
       </Card>

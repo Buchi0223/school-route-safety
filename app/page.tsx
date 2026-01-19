@@ -56,6 +56,9 @@ export default function Home() {
   // モバイル用タブ状態
   const [mobileActiveTab, setMobileActiveTab] = useState<MobileViewTab>("map");
 
+  // モバイル版Street View表示用
+  const [showMobileStreetView, setShowMobileStreetView] = useState(false);
+
   // モバイル用新UI状態
   const [mobileMenuTab, setMobileMenuTab] = useState<MenuTab>("route");
   const routeOverlay = useOverlay(false);
@@ -386,6 +389,17 @@ export default function Home() {
   // 安全ガイドを閉じる
   const handleCloseGuide = useCallback(() => {
     setSelectedHazard(null);
+    setShowMobileStreetView(false);
+  }, []);
+
+  // モバイル版でStreet Viewを表示
+  const handleShowMobileStreetView = useCallback(() => {
+    setShowMobileStreetView(true);
+  }, []);
+
+  // モバイル版Street Viewを閉じる
+  const handleCloseMobileStreetView = useCallback(() => {
+    setShowMobileStreetView(false);
   }, []);
 
   // モバイルメニュータブ変更ハンドラ
@@ -599,9 +613,38 @@ export default function Home() {
               <SafetyGuideOverlay
                 selectedHazard={selectedHazard}
                 onClose={handleCloseGuide}
+                onShowStreetView={handleShowMobileStreetView}
               />
             )}
           </MapContainer>
+
+          {/* モバイル版Street Viewオーバーレイ */}
+          {showMobileStreetView && selectedHazard && (
+            <div className="absolute inset-0 z-[2000] bg-black">
+              <div className="h-full flex flex-col">
+                <div className="bg-gray-900 px-4 py-3 flex items-center justify-between">
+                  <h3 className="text-white font-bold text-sm truncate flex-1">
+                    {selectedHazard.title}
+                  </h3>
+                  <button
+                    onClick={handleCloseMobileStreetView}
+                    className="ml-2 px-3 py-1 bg-gray-700 text-white rounded text-sm"
+                  >
+                    閉じる
+                  </button>
+                </div>
+                <div className="flex-1">
+                  <StreetViewPanel
+                    selectedHazard={selectedHazard}
+                    apiKey={googleMapsApiKey}
+                    tourPosition={null}
+                    tourHeading={0}
+                    isTourActive={false}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 経路検索オーバーレイ */}

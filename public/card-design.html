@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>通学路安全確認アプリ - カードデザイン</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .page-title {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #333;
+    }
+
+    .cards-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 30px;
+      justify-content: center;
+    }
+
+    .card-wrapper {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .card-label {
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    /* 名刺サイズ: 91mm x 55mm */
+    .card {
+      width: 91mm;
+      height: 55mm;
+      border: 1px solid #ddd;
+      border-radius: 3mm;
+      overflow: hidden;
+      position: relative;
+      background: white;
+    }
+
+    /* デザイン案1: シンプル＆親しみやすい */
+    .card-design-1 {
+      background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+      padding: 4mm;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-design-1 .header {
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+      margin-bottom: 2mm;
+    }
+
+    .card-design-1 .shield-icon {
+      width: 8mm;
+      height: 8mm;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .card-design-1 .title {
+      color: white;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .card-design-1 .content {
+      flex: 1;
+      background: white;
+      border-radius: 2mm;
+      padding: 3mm;
+      display: flex;
+      gap: 3mm;
+    }
+
+    .card-design-1 .qr-area {
+      width: 25mm;
+      height: 25mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-design-1 .qr-area img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .card-design-1 .info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .card-design-1 .info h2 {
+      font-size: 10px;
+      color: #4F46E5;
+      margin-bottom: 1mm;
+    }
+
+    .card-design-1 .info p {
+      font-size: 7px;
+      color: #666;
+      line-height: 1.4;
+    }
+
+    .card-design-1 .url {
+      font-size: 6px;
+      color: #999;
+      margin-top: 2mm;
+    }
+
+    /* デザイン案2: キャラクター重視 */
+    .card-design-2 {
+      background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 100%);
+      padding: 3mm;
+      display: flex;
+    }
+
+    .card-design-2 .left-section {
+      width: 30mm;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-design-2 .character {
+      width: 20mm;
+      height: 24mm;
+      margin-bottom: 1mm;
+    }
+
+    .card-design-2 .character img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .card-design-2 .character-name {
+      font-size: 6px;
+      color: #92400E;
+      text-align: center;
+    }
+
+    .card-design-2 .right-section {
+      flex: 1;
+      background: white;
+      border-radius: 2mm;
+      padding: 3mm;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-design-2 .main-title {
+      font-size: 9px;
+      font-weight: bold;
+      color: #B45309;
+      text-align: center;
+      margin-bottom: 2mm;
+      border-bottom: 1px dashed #FCD34D;
+      padding-bottom: 1mm;
+    }
+
+    .card-design-2 .qr-row {
+      display: flex;
+      gap: 2mm;
+      align-items: center;
+    }
+
+    .card-design-2 .qr-area {
+      width: 22mm;
+      height: 22mm;
+    }
+
+    .card-design-2 .qr-area img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .card-design-2 .instructions {
+      flex: 1;
+      font-size: 7px;
+      color: #78350F;
+      line-height: 1.5;
+    }
+
+    .card-design-2 .instructions .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 1mm;
+      margin-bottom: 1mm;
+    }
+
+    .card-design-2 .instructions .num {
+      background: #F59E0B;
+      color: white;
+      width: 3mm;
+      height: 3mm;
+      border-radius: 50%;
+      font-size: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* デザイン案3: 道路風デザイン */
+    .card-design-3 {
+      background: #1E3A5F;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-design-3::before {
+      content: '';
+      position: absolute;
+      left: 8mm;
+      top: 0;
+      bottom: 0;
+      width: 12mm;
+      background: #4B5563;
+    }
+
+    .card-design-3::after {
+      content: '';
+      position: absolute;
+      left: 13.5mm;
+      top: 0;
+      bottom: 0;
+      width: 1mm;
+      background: repeating-linear-gradient(
+        to bottom,
+        #FCD34D 0,
+        #FCD34D 3mm,
+        transparent 3mm,
+        transparent 6mm
+      );
+    }
+
+    .card-design-3 .content-area {
+      position: relative;
+      z-index: 1;
+      padding: 3mm;
+      padding-left: 24mm;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-design-3 .badge {
+      position: absolute;
+      left: 2mm;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18mm;
+      height: 18mm;
+      background: #10B981;
+      border-radius: 50%;
+      border: 2px solid white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    .card-design-3 .badge-inner {
+      text-align: center;
+      color: white;
+    }
+
+    .card-design-3 .badge-inner .icon {
+      font-size: 16px;
+    }
+
+    .card-design-3 .badge-inner .text {
+      font-size: 5px;
+      margin-top: 1mm;
+    }
+
+    .card-design-3 .header-text {
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      margin-bottom: 1mm;
+    }
+
+    .card-design-3 .sub-text {
+      color: #93C5FD;
+      font-size: 6px;
+      margin-bottom: 2mm;
+    }
+
+    .card-design-3 .main-content {
+      flex: 1;
+      background: white;
+      border-radius: 2mm;
+      padding: 2mm;
+      display: flex;
+      gap: 2mm;
+    }
+
+    .card-design-3 .qr-area {
+      width: 20mm;
+      height: 20mm;
+    }
+
+    .card-design-3 .qr-area img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .card-design-3 .info-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .card-design-3 .info-area p {
+      font-size: 6px;
+      color: #374151;
+      line-height: 1.4;
+      margin-bottom: 1mm;
+    }
+
+    .card-design-3 .info-area .url {
+      font-size: 5px;
+      color: #9CA3AF;
+    }
+
+    /* デザイン案4: ポップ＆カラフル */
+    .card-design-4 {
+      background: white;
+      border: 3px solid #EC4899;
+      padding: 2mm;
+    }
+
+    .card-design-4 .inner {
+      height: 100%;
+      background: linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 50%, #FBCFE8 100%);
+      border-radius: 2mm;
+      padding: 3mm;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-design-4 .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2mm;
+      margin-bottom: 2mm;
+    }
+
+    .card-design-4 .star {
+      color: #F59E0B;
+      font-size: 12px;
+    }
+
+    .card-design-4 .title {
+      font-size: 11px;
+      font-weight: bold;
+      color: #BE185D;
+    }
+
+    .card-design-4 .content-row {
+      flex: 1;
+      display: flex;
+      gap: 3mm;
+    }
+
+    .card-design-4 .qr-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .card-design-4 .qr-area {
+      width: 24mm;
+      height: 24mm;
+      background: white;
+      padding: 1mm;
+      border-radius: 2mm;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .card-design-4 .qr-area img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .card-design-4 .scan-text {
+      font-size: 6px;
+      color: #9D174D;
+      margin-top: 1mm;
+    }
+
+    .card-design-4 .info-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .card-design-4 .feature-list {
+      list-style: none;
+    }
+
+    .card-design-4 .feature-list li {
+      font-size: 7px;
+      color: #831843;
+      margin-bottom: 1mm;
+      display: flex;
+      align-items: center;
+      gap: 1mm;
+    }
+
+    .card-design-4 .feature-list .check {
+      color: #10B981;
+      font-size: 8px;
+    }
+
+    .card-design-4 .footer-text {
+      font-size: 5px;
+      color: #9CA3AF;
+      text-align: right;
+      margin-top: auto;
+    }
+
+    /* 印刷用スタイル */
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .page-title {
+        display: none;
+      }
+
+      .cards-container {
+        gap: 10mm;
+      }
+
+      .card-wrapper {
+        box-shadow: none;
+        padding: 0;
+        background: transparent;
+      }
+
+      .card-label {
+        display: none;
+      }
+
+      .card {
+        border: 0.5pt solid #ccc;
+      }
+    }
+
+    .print-button {
+      display: block;
+      margin: 30px auto;
+      padding: 12px 30px;
+      background: #4F46E5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .print-button:hover {
+      background: #4338CA;
+    }
+
+    @media print {
+      .print-button {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1 class="page-title">通学路安全確認アプリ - カードデザイン案</h1>
+
+  <div class="cards-container">
+    <!-- デザイン案1 -->
+    <div class="card-wrapper">
+      <div class="card-label">デザイン案1: シンプル＆親しみやすい</div>
+      <div class="card card-design-1">
+        <div class="header">
+          <div class="shield-icon">🛡️</div>
+          <div class="title">通学路安全確認アプリ</div>
+        </div>
+        <div class="content">
+          <div class="qr-area">
+            <img src="qrcode.png" alt="QRコード">
+          </div>
+          <div class="info">
+            <h2>おうちの人といっしょに<br>通学路をたんけんしよう！</h2>
+            <p>スマートフォンでQRコードを<br>読み取ってアクセス</p>
+            <div class="url">map-demo-eight.vercel.app</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デザイン案2 -->
+    <div class="card-wrapper">
+      <div class="card-label">デザイン案2: キャラクター重視</div>
+      <div class="card card-design-2">
+        <div class="left-section">
+          <div class="character">
+            <img src="images/character_v2.png" alt="セーフティにゃん">
+          </div>
+          <div class="character-name">セーフティにゃん</div>
+        </div>
+        <div class="right-section">
+          <div class="main-title">🎒 通学路安全たんけん 🎒</div>
+          <div class="qr-row">
+            <div class="qr-area">
+              <img src="qrcode.png" alt="QRコード">
+            </div>
+            <div class="instructions">
+              <div class="step">
+                <span class="num">1</span>
+                <span>QRコードをよみとる</span>
+              </div>
+              <div class="step">
+                <span class="num">2</span>
+                <span>通学路をせっていする</span>
+              </div>
+              <div class="step">
+                <span class="num">3</span>
+                <span>きけんな場所をさがそう！</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デザイン案3 -->
+    <div class="card-wrapper">
+      <div class="card-label">デザイン案3: 道路風デザイン</div>
+      <div class="card card-design-3">
+        <div class="badge">
+          <div class="badge-inner">
+            <div class="icon">🚸</div>
+            <div class="text">安全</div>
+          </div>
+        </div>
+        <div class="content-area">
+          <div class="header-text">通学路安全確認アプリ</div>
+          <div class="sub-text">〜 おうちの人といっしょに学ぼう 〜</div>
+          <div class="main-content">
+            <div class="qr-area">
+              <img src="qrcode.png" alt="QRコード">
+            </div>
+            <div class="info-area">
+              <p>通学路のきけんな場所を<br>バーチャル体験で学べます</p>
+              <p>スマホでQRコードを<br>読み取ってスタート！</p>
+              <div class="url">map-demo-eight.vercel.app</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デザイン案4 -->
+    <div class="card-wrapper">
+      <div class="card-label">デザイン案4: ポップ＆カラフル</div>
+      <div class="card card-design-4">
+        <div class="inner">
+          <div class="header-row">
+            <span class="star">⭐</span>
+            <span class="title">通学路たんけんカード</span>
+            <span class="star">⭐</span>
+          </div>
+          <div class="content-row">
+            <div class="qr-section">
+              <div class="qr-area">
+                <img src="qrcode.png" alt="QRコード">
+              </div>
+              <div class="scan-text">📱 スキャンしてね</div>
+            </div>
+            <div class="info-section">
+              <ul class="feature-list">
+                <li><span class="check">✓</span> 通学路をちずでかくにん</li>
+                <li><span class="check">✓</span> きけんな場所をさがそう</li>
+                <li><span class="check">✓</span> ストリートビューで体験</li>
+                <li><span class="check">✓</span> 安全マスターしょうじょう</li>
+              </ul>
+              <div class="footer-text">おうちの人といっしょに使ってね</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="print-button" onclick="window.print()">🖨️ 印刷する</button>
+</body>
+</html>

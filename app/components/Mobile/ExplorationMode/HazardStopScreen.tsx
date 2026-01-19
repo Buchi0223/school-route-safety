@@ -27,15 +27,15 @@ declare global {
 // セリフシーケンス
 const SPEECH_SEQUENCE = [
   {
-    message: "ここには、どんな危ない場所がひそんでいそうかな？",
+    message: "どこに危険があるかな？3つ探してみよう！",
     subMessage: "まわりをよく見てみよう",
   },
   {
-    message: "見つけた危ない場所で身を守るにはどうしたらいいかな？",
+    message: "危険から身を守るためにどう注意したらいいと思う？",
     subMessage: "考えてみよう",
   },
   {
-    message: "続きの道を進もう！",
+    message: "探検を続けよう！",
     subMessage: "タップしてツアーを再開",
   },
 ];
