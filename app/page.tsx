@@ -99,6 +99,7 @@ export default function Home() {
     },
     onTourEnd: () => {
       exploration.completeTour();
+      setSelectedHazard(null); // ゴール時に危険地点選択をクリア
     },
   });
 
@@ -583,7 +584,7 @@ export default function Home() {
             onWaypointDoubleClick={handleWaypointDoubleClick}
             onWaypointDelete={handleWaypointDelete}
             onWaypointMove={handleWaypointMove}
-            isDrawingRoute={isDrawingRoute || isExplorationDrawingRoute}
+            isDrawingRoute={exploration.state === "route_setting" ? isExplorationDrawingRoute : isDrawingRoute}
             routeCoordinates={exploration.state === "route_setting" ? explorationRouteCoordinates : routeCoordinates}
             onRouteDrag={handleRouteDrag}
             hazardPoints={displayedHazards}
@@ -593,8 +594,8 @@ export default function Home() {
             tourHeading={tourHeading}
             isTourActive={isTourActive}
           >
-            {/* 安全ガイドオーバーレイ（モバイルでも地図上に表示、ただし探検モードツアー中は非表示） */}
-            {!(exploration.state === "touring" || exploration.state === "hazard_stop") && (
+            {/* 安全ガイドオーバーレイ（モバイルでも地図上に表示、ただし探検モード中は非表示） */}
+            {!exploration.isActive && (
               <SafetyGuideOverlay
                 selectedHazard={selectedHazard}
                 onClose={handleCloseGuide}
