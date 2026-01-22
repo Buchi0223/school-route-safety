@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   description: "小学生の通学路における安全教育を支援するデモアプリケーション",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
