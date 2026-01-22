@@ -8,6 +8,12 @@ import { Overlay } from "./components/Mobile/Overlay";
 import { RouteSearchOverlay } from "./components/Mobile/RouteSearchOverlay";
 import { HelpOverlay } from "./components/Mobile/HelpOverlay";
 import { ExplorationMode } from "./components/Mobile/ExplorationMode";
+import { ExplorationModeDesktop } from "./components/Desktop/ExplorationMode";
+import { GuidePanelDesktop } from "./components/Desktop/ExplorationMode/GuidePanelDesktop";
+import { TourControlsBarDesktop } from "./components/Desktop/ExplorationMode/TourControlsBarDesktop";
+import { HazardStopPanelDesktop } from "./components/Desktop/ExplorationMode/HazardStopPanelDesktop";
+import { CertificateModalDesktop } from "./components/Desktop/ExplorationMode/CertificateModalDesktop";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useOverlay } from "@/lib/useOverlay";
 import { useExplorationMode } from "@/lib/useExplorationMode";
 import { StreetViewPanel } from "./components/StreetView";
@@ -63,6 +69,10 @@ export default function Home() {
   const [mobileMenuTab, setMobileMenuTab] = useState<MenuTab>("route");
   const routeOverlay = useOverlay(false);
   const helpOverlay = useOverlay(false);
+
+  // デスクトップ用探検モードタブ状態
+  type DesktopTab = "route" | "explore";
+  const [desktopTab, setDesktopTab] = useState<DesktopTab>("route");
 
   // 探検モード
   const exploration = useExplorationMode();
@@ -496,14 +506,100 @@ export default function Home() {
   const explorationHasValidRoute = explorationWaypoints.some((wp) => wp.type === "start") &&
     explorationWaypoints.some((wp) => wp.type === "end");
 
+  // デスクトップ版探検モード：危険地点停止時のセリフインデックス
+  const [desktopSpeechIndex, setDesktopSpeechIndex] = useState(0);
+
+  // 危険地点停止時にセリフインデックスをリセット
+  useEffect(() => {
+    if (exploration.state === "hazard_stop") {
+      setDesktopSpeechIndex(0);
+    }
+  }, [exploration.state]);
+
+  // セリフを次に進める
+  const handleDesktopSpeechNext = useCallback(() => {
+    setDesktopSpeechIndex((prev) => Math.min(prev + 1, 2));
+  }, []);
+
+  // デスクトップ用タブ切り替えハンドラ
+  const handleDesktopTabChange = useCallback((tab: DesktopTab) => {
+    setDesktopTab(tab);
+    if (tab === "route") {
+      // 経路検索モード
+      exploration.exitExploration();
+      explorationTour.stop();
+      setExplorationWaypoints([]);
+      setIsExplorationDrawingRoute(false);
+      setExplorationRouteCoordinates(null);
+    } else if (tab === "explore") {
+      // 探検モードを開始
+      exploration.startExploration();
+      setExplorationWaypoints([]);
+      setIsExplorationDrawingRoute(true);
+      // 通常のルート設定をクリア
+      setIsDrawingRoute(false);
+    }
+  }, [exploration, explorationTour]);
+
+  // デスクトップ探検モード終了ハンドラ
+  const handleDesktopExplorationExit = useCallback(() => {
+    handleDesktopTabChange("route");
+  }, [handleDesktopTabChange]);
+
+  // キーボードショートカット：再生/一時停止トグル
+  const handleKeyboardPlayPause = useCallback(() => {
+    if (explorationTour.status === "playing") {
+      explorationTour.pause();
+    } else {
+      explorationTour.play();
+    }
+  }, [explorationTour]);
+
+  // デスクトップ版探検モードのキーボードショートカット
+  useKeyboardShortcuts({
+    onPlayPause: handleKeyboardPlayPause,
+    onForward: explorationTour.forward,
+    onBackward: explorationTour.backward,
+    onStop: handleExplorationExitTour,
+    onSpeedChange: explorationTour.setSpeed,
+    onSpeechNext: handleDesktopSpeechNext,
+    isActive: desktopTab === "explore" && (exploration.state === "touring" || exploration.state === "hazard_stop"),
+    isHazardStop: exploration.state === "hazard_stop",
+  });
+
   return (
     <main className="h-screen flex flex-col">
       {/* ヘッダー */}
       <header className="bg-blue-600 text-white px-4 py-2 shadow-md">
-        <div className="flex items-center gap-3">
-          <Shield className="h-6 w-6" />
-          <div>
-            <h1 className="text-lg font-bold">通学路安全確認デモアプリ</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Shield className="h-6 w-6" />
+            <div>
+              <h1 className="text-lg font-bold">通学路安全確認デモアプリ</h1>
+            </div>
+          </div>
+          {/* デスクトップ用タブ */}
+          <div className="hidden lg:flex items-center gap-1 bg-blue-700/50 rounded-lg p-1">
+            <button
+              onClick={() => handleDesktopTabChange("route")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                desktopTab === "route"
+                  ? "bg-white text-blue-600"
+                  : "text-white/80 hover:text-white hover:bg-blue-500/50"
+              }`}
+            >
+              経路検索
+            </button>
+            <button
+              onClick={() => handleDesktopTabChange("explore")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                desktopTab === "explore"
+                  ? "bg-white text-blue-600"
+                  : "text-white/80 hover:text-white hover:bg-blue-500/50"
+              }`}
+            >
+              通学路探検
+            </button>
           </div>
         </div>
       </header>
@@ -514,49 +610,52 @@ export default function Home() {
         {/* 左側：地図エリア（60%） */}
         <div className="lg:w-3/5 h-full relative">
           <MapContainer
-            waypoints={waypoints}
+            waypoints={desktopTab === "explore" ? explorationWaypoints : waypoints}
             onWaypointAdd={handleWaypointAdd}
             onWaypointDoubleClick={handleWaypointDoubleClick}
             onWaypointDelete={handleWaypointDelete}
             onWaypointMove={handleWaypointMove}
-            isDrawingRoute={isDrawingRoute}
-            routeCoordinates={routeCoordinates}
+            isDrawingRoute={desktopTab === "explore" ? isExplorationDrawingRoute : isDrawingRoute}
+            routeCoordinates={desktopTab === "explore" ? explorationRouteCoordinates : routeCoordinates}
             onRouteDrag={handleRouteDrag}
             hazardPoints={displayedHazards}
             onHazardClick={handleHazardClick}
             selectedHazardId={selectedHazard?.id || null}
             tourPosition={tourPosition}
-            tourHeading={tourHeading}
-            isTourActive={isTourActive}
+            tourHeading={desktopTab === "explore" ? explorationTourHeading : tourHeading}
+            isTourActive={desktopTab === "explore" ? (exploration.state === "touring" || exploration.state === "hazard_stop") : isTourActive}
           >
-            {/* 安全ガイドオーバーレイ */}
-            <SafetyGuideOverlay
-              selectedHazard={selectedHazard}
-              onClose={handleCloseGuide}
-            />
+            {/* 安全ガイドオーバーレイ（探検モード中は非表示） */}
+            {desktopTab !== "explore" && (
+              <SafetyGuideOverlay
+                selectedHazard={selectedHazard}
+                onClose={handleCloseGuide}
+              />
+            )}
           </MapContainer>
 
-          {/* 経路設定コントロール（地図上に重ねる） */}
-          <div className="absolute top-4 left-4 z-[1000] w-80 max-w-[calc(100%-2rem)] space-y-3">
-            <RouteControls
-              waypoints={waypoints}
-              isDrawingRoute={isDrawingRoute}
-              onStartDrawing={() => setIsDrawingRoute(true)}
-              onStopDrawing={() => setIsDrawingRoute(false)}
-              onClearWaypoints={handleClearWaypoints}
-              onCalculateRoute={handleCalculateRoute}
-              isCalculatingRoute={isCalculatingRoute}
-              routeDistance={routeDistance}
-            />
-            {/* ツアーコントロール */}
-            <TourControls
-              status={tour.status}
-              progress={tour.progress}
-              speed={tour.speed}
-              isReady={tour.isReady}
-              nearbyHazard={tour.nearbyHazard}
-              onPlay={tour.play}
-              onPause={tour.pause}
+          {/* 経路設定コントロール（地図上に重ねる） - 通常モード時のみ */}
+          {desktopTab === "route" && (
+            <div className="absolute top-4 left-4 z-[1000] w-80 max-w-[calc(100%-2rem)] space-y-3">
+              <RouteControls
+                waypoints={waypoints}
+                isDrawingRoute={isDrawingRoute}
+                onStartDrawing={() => setIsDrawingRoute(true)}
+                onStopDrawing={() => setIsDrawingRoute(false)}
+                onClearWaypoints={handleClearWaypoints}
+                onCalculateRoute={handleCalculateRoute}
+                isCalculatingRoute={isCalculatingRoute}
+                routeDistance={routeDistance}
+              />
+              {/* ツアーコントロール */}
+              <TourControls
+                status={tour.status}
+                progress={tour.progress}
+                speed={tour.speed}
+                isReady={tour.isReady}
+                nearbyHazard={tour.nearbyHazard}
+                onPlay={tour.play}
+                onPause={tour.pause}
               onStop={tour.stop}
               onForward={tour.forward}
               onBackward={tour.backward}
@@ -565,22 +664,121 @@ export default function Home() {
               totalPoints={tour.tourPoints.length}
               currentIndex={tour.currentIndex}
             />
-          </div>
+            </div>
+          )}
+
+          {/* デスクトップ版探検モードコントロール */}
+          {desktopTab === "explore" && exploration.isActive && (
+            <>
+              <div className="absolute top-4 left-4 z-[1000] w-80 max-w-[calc(100%-2rem)]">
+                <ExplorationModeDesktop
+                  state={exploration.state}
+                  hasValidRoute={explorationHasValidRoute}
+                  waypoints={explorationWaypoints}
+                  routeDistance={explorationRouteDistance || null}
+                  onStartTour={handleExplorationStartTour}
+                  onExit={handleDesktopExplorationExit}
+                  onReset={handleExplorationRetry}
+                  apiKey={googleMapsApiKey}
+                  routeCoordinates={explorationRouteCoordinates || []}
+                  hazardPoints={displayedHazards}
+                  tourPoints={explorationTour.tourPoints}
+                  currentIndex={explorationTour.currentIndex}
+                  currentPosition={explorationTour.currentPosition}
+                  heading={explorationTourHeading}
+                  progress={explorationTour.progress}
+                  speed={explorationTour.speed}
+                  isPlaying={explorationTour.status === "playing"}
+                  nearbyHazard={explorationTour.nearbyHazard}
+                  onPlay={explorationTour.play}
+                  onPause={explorationTour.pause}
+                  onForward={explorationTour.forward}
+                  onBackward={explorationTour.backward}
+                  onSpeedChange={explorationTour.setSpeed}
+                  onGoToIndex={explorationTour.goToIndex}
+                  onExitTour={handleExplorationExitTour}
+                  onResumeFromHazard={handleResumeFromHazard}
+                  onRetry={handleExplorationRetry}
+                />
+              </div>
+
+              {/* ツアー中のコントロールバー（下部固定） */}
+              {(exploration.state === "touring" || exploration.state === "hazard_stop") && (
+                <div className="absolute bottom-4 left-4 right-4 z-[1000]">
+                  <TourControlsBarDesktop
+                    currentIndex={explorationTour.currentIndex}
+                    totalPoints={explorationTour.tourPoints.length}
+                    progress={explorationTour.progress}
+                    isPlaying={explorationTour.status === "playing"}
+                    speed={explorationTour.speed}
+                    onPlay={explorationTour.play}
+                    onPause={explorationTour.pause}
+                    onForward={explorationTour.forward}
+                    onBackward={explorationTour.backward}
+                    onStop={handleExplorationExitTour}
+                    onSpeedChange={explorationTour.setSpeed}
+                    onGoToIndex={explorationTour.goToIndex}
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* 右側：Street Viewエリア（40%） */}
         <div className="lg:w-2/5 h-full flex flex-col overflow-hidden bg-gray-50">
-          <div className="flex-1 p-3 min-h-0">
-            <StreetViewPanel
-              selectedHazard={selectedHazard}
-              apiKey={googleMapsApiKey}
-              tourPosition={tourPosition}
-              tourHeading={tourHeading}
-              isTourActive={isTourActive}
-            />
-          </div>
+          {/* 通常モード：Street Viewのみ */}
+          {desktopTab === "route" && (
+            <div className="flex-1 p-3 min-h-0">
+              <StreetViewPanel
+                selectedHazard={selectedHazard}
+                apiKey={googleMapsApiKey}
+                tourPosition={tourPosition}
+                tourHeading={tourHeading}
+                isTourActive={isTourActive}
+              />
+            </div>
+          )}
+
+          {/* 探検モード：Street View（上60%）+ ガイドパネル（下40%） */}
+          {desktopTab === "explore" && (
+            <>
+              <div className="h-[60%] p-3 pb-1.5 min-h-0 relative">
+                {/* 危険地点停止時のヘッダーオーバーレイ */}
+                {exploration.state === "hazard_stop" && explorationTour.nearbyHazard && (
+                  <HazardStopPanelDesktop hazard={explorationTour.nearbyHazard} />
+                )}
+                <StreetViewPanel
+                  selectedHazard={explorationTour.nearbyHazard}
+                  apiKey={googleMapsApiKey}
+                  tourPosition={tourPosition}
+                  tourHeading={explorationTourHeading}
+                  isTourActive={exploration.state === "touring" || exploration.state === "hazard_stop"}
+                />
+              </div>
+              <div className="h-[40%] p-3 pt-1.5 min-h-0">
+                <GuidePanelDesktop
+                  state={exploration.state}
+                  nearbyHazard={explorationTour.nearbyHazard}
+                  onResumeFromHazard={handleResumeFromHazard}
+                  speechIndex={desktopSpeechIndex}
+                  onSpeechNext={handleDesktopSpeechNext}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* デスクトップ版修了証モーダル */}
+      {desktopTab === "explore" && exploration.state === "completed" && (
+        <CertificateModalDesktop
+          hazardCount={displayedHazards.length}
+          routeDistance={explorationRouteDistance}
+          onRetry={handleExplorationRetry}
+          onExit={handleDesktopExplorationExit}
+        />
+      )}
 
       {/* モバイル: 新UIレイアウト */}
       <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
