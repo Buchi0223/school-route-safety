@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { HazardPoint } from "./types";
+import { HazardPoint, TourStopPoint } from "./types";
 import { interpolateRoutePoints } from "./routing";
 
 export type TourStatus = "idle" | "playing" | "paused" | "finished";
@@ -11,7 +11,7 @@ export interface TourState {
   currentIndex: number;
   tourPoints: [number, number][];
   speed: number; // 1-5 (1=遅い, 5=速い)
-  nearbyHazard: HazardPoint | null;
+  nearbyHazard: TourStopPoint | null;
   // 既に一時停止した危険地点のIDセット（通過済み）
   pausedHazardIds: Set<string>;
 }
@@ -26,19 +26,23 @@ const SPEED_INTERVALS: Record<number, number> = {
 
 interface UseTourProps {
   routeCoordinates: [number, number][] | null;
-  hazardPoints: HazardPoint[];
+  hazardPoints?: HazardPoint[];
+  stopPoints?: TourStopPoint[]; // 停止地点（HazardPointまたはMyHazardPoint）
   onPositionChange?: (position: [number, number], heading: number) => void;
-  onHazardApproach?: (hazard: HazardPoint) => void;
+  onHazardApproach?: (hazard: TourStopPoint) => void;
   onTourEnd?: () => void;
 }
 
 export function useTour({
   routeCoordinates,
   hazardPoints,
+  stopPoints,
   onPositionChange,
   onHazardApproach,
   onTourEnd,
 }: UseTourProps) {
+  // stopPointsが指定されていればそちらを使用、なければhazardPointsを使用
+  const activeStopPoints: TourStopPoint[] = stopPoints ?? hazardPoints ?? [];
   const [state, setState] = useState<TourState>({
     status: "idle",
     currentIndex: 0,
@@ -90,25 +94,25 @@ export function useTour({
     []
   );
 
-  // 近くの危険地点をチェック
+  // 近くの停止地点をチェック
   const checkNearbyHazard = useCallback(
-    (position: [number, number]): HazardPoint | null => {
+    (position: [number, number]): TourStopPoint | null => {
       const HAZARD_DETECTION_RADIUS = 30; // 30m以内
 
-      for (const hazard of hazardPoints) {
+      for (const stopPoint of activeStopPoints) {
         const distance = haversineDistance(
           position[0],
           position[1],
-          hazard.lat,
-          hazard.lng
+          stopPoint.lat,
+          stopPoint.lng
         );
         if (distance <= HAZARD_DETECTION_RADIUS) {
-          return hazard;
+          return stopPoint;
         }
       }
       return null;
     },
-    [hazardPoints]
+    [activeStopPoints]
   );
 
   // 次のポイントへ移動

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { HazardPoint, Waypoint } from "@/lib/types";
+import { TourStopPoint, Waypoint, isHazardPoint, isMyHazardPoint, MY_HAZARD_REASON_INFO } from "@/lib/types";
 import {
   Compass,
   MapPin,
@@ -30,7 +30,7 @@ interface ExplorationControlsDesktopProps {
   totalPoints?: number;
   progress?: number;
   isPlaying?: boolean;
-  nearbyHazard?: HazardPoint | null;
+  nearbyHazard?: TourStopPoint | null;
   hazardCount?: number;
 
   // アクション
@@ -219,9 +219,21 @@ export const ExplorationControlsDesktop = memo(function ExplorationControlsDeskt
         </CardHeader>
         <CardContent className="space-y-3 pt-3">
           {/* 危険地点情報 */}
-          <div className="bg-red-50 rounded-lg p-3">
-            <h4 className="font-bold text-red-800">{nearbyHazard.title}</h4>
-            <p className="text-sm text-red-600 mt-1">{nearbyHazard.description}</p>
+          <div className={`rounded-lg p-3 ${isMyHazardPoint(nearbyHazard) ? "bg-purple-50" : "bg-red-50"}`}>
+            <h4 className={`font-bold ${isMyHazardPoint(nearbyHazard) ? "text-purple-800" : "text-red-800"}`}>
+              {isHazardPoint(nearbyHazard)
+                ? nearbyHazard.title
+                : isMyHazardPoint(nearbyHazard)
+                  ? MY_HAZARD_REASON_INFO[nearbyHazard.reasons[0]].label
+                  : "危険地点"}
+            </h4>
+            <p className={`text-sm mt-1 ${isMyHazardPoint(nearbyHazard) ? "text-purple-600" : "text-red-600"}`}>
+              {isHazardPoint(nearbyHazard)
+                ? nearbyHazard.description
+                : isMyHazardPoint(nearbyHazard)
+                  ? MY_HAZARD_REASON_INFO[nearbyHazard.reasons[0]].description
+                  : ""}
+            </p>
           </div>
 
           {/* 進捗情報 */}

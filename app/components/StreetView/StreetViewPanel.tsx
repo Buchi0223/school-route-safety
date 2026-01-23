@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, Navigation, AlertCircle, Loader2 } from "lucide-react";
-import { HazardPoint, HAZARD_TYPE_INFO } from "@/lib/types";
+import { TourStopPoint, HAZARD_TYPE_INFO, isHazardPoint, isMyHazardPoint, MY_HAZARD_REASON_INFO } from "@/lib/types";
 
 // Google Maps API の型定義を拡張
 declare global {
@@ -13,7 +13,7 @@ declare global {
 }
 
 interface StreetViewPanelProps {
-  selectedHazard: HazardPoint | null;
+  selectedHazard: TourStopPoint | null;
   apiKey: string;
   // ツアー用プロパティ
   tourPosition?: [number, number] | null;
@@ -182,7 +182,13 @@ export function StreetViewPanel({
     );
   }
 
-  const hazardInfo = HAZARD_TYPE_INFO[selectedHazard.type];
+  const hazardInfo = isHazardPoint(selectedHazard) ? HAZARD_TYPE_INFO[selectedHazard.type] : null;
+  const myPinInfo = isMyHazardPoint(selectedHazard) ? {
+    icon: "📍",
+    color: "#8B5CF6",
+    label: "あなたが立てたピン",
+    title: selectedHazard.reasons.map(r => MY_HAZARD_REASON_INFO[r].label).join("、"),
+  } : null;
 
   return (
     <Card className="h-full flex flex-col">
@@ -192,15 +198,17 @@ export function StreetViewPanel({
           Street View
         </CardTitle>
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-xl">{hazardInfo.icon}</span>
+          <span className="text-xl">{hazardInfo?.icon || myPinInfo?.icon}</span>
           <span
             className="px-2 py-0.5 rounded text-xs text-white"
-            style={{ backgroundColor: hazardInfo.color }}
+            style={{ backgroundColor: hazardInfo?.color || myPinInfo?.color }}
           >
-            {hazardInfo.label}
+            {hazardInfo?.label || myPinInfo?.label}
           </span>
         </div>
-        <p className="text-sm font-medium mt-1">{selectedHazard.title}</p>
+        <p className="text-sm font-medium mt-1">
+          {isHazardPoint(selectedHazard) ? selectedHazard.title : myPinInfo?.title}
+        </p>
       </CardHeader>
       <CardContent className="flex-1 min-h-0">
         <div

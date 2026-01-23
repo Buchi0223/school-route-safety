@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { RouteControls, TourControls, MobileViewTabs, MobileViewTab } from "./components/Controls";
 import { MobileHeader, MenuTab } from "./components/Mobile/MobileHeader";
@@ -8,7 +8,10 @@ import { Overlay } from "./components/Mobile/Overlay";
 import { RouteSearchOverlay } from "./components/Mobile/RouteSearchOverlay";
 import { HelpOverlay } from "./components/Mobile/HelpOverlay";
 import { ExplorationMode } from "./components/Mobile/ExplorationMode";
+import { TourTargetBottomSheet } from "./components/Mobile/ExplorationMode/TourTargetBottomSheet";
 import { ExplorationModeDesktop } from "./components/Desktop/ExplorationMode";
+import { MyHazardPointModeDesktop } from "./components/Desktop/MyHazardPointMode";
+import { MyHazardPointModeMobile } from "./components/Mobile/MyHazardPointMode";
 import { GuidePanelDesktop } from "./components/Desktop/ExplorationMode/GuidePanelDesktop";
 import { TourControlsBarDesktop } from "./components/Desktop/ExplorationMode/TourControlsBarDesktop";
 import { HazardStopPanelDesktop } from "./components/Desktop/ExplorationMode/HazardStopPanelDesktop";
@@ -18,11 +21,12 @@ import { useOverlay } from "@/lib/useOverlay";
 import { useExplorationMode } from "@/lib/useExplorationMode";
 import { StreetViewPanel } from "./components/StreetView";
 import { SafetyGuideOverlay, SafetyGuidePanel } from "./components/Guide";
-import { Waypoint, HazardPoint } from "@/lib/types";
-import { loadHazardPoints, getHazardsAlongRoute } from "@/lib/hazardData";
+import { Waypoint, HazardPoint, TourTarget, TourStopPoint, isHazardPoint } from "@/lib/types";
+import { loadHazardPoints, getHazardsAlongRoute, selectHazardPointsForTour } from "@/lib/hazardData";
 import { getWalkingRoute, calculateRouteDistance, sortWaypointsByRoute } from "@/lib/routing";
 import { useTour } from "@/lib/useTour";
-import { Shield } from "lucide-react";
+import { useMyHazardPoints } from "@/lib/useMyHazardPoints";
+import { Shield, MapPin } from "lucide-react";
 
 // MapContainer を動的インポート（SSR無効）
 const MapContainer = dynamic(
@@ -52,6 +56,11 @@ export default function Home() {
   const [displayedHazards, setDisplayedHazards] = useState<HazardPoint[]>([]);
   const [selectedHazard, setSelectedHazard] = useState<HazardPoint | null>(null);
 
+  // マイ危険ポイント
+  const myHazardPoints = useMyHazardPoints();
+  const [selectedMyHazardPinId, setSelectedMyHazardPinId] = useState<string | null>(null);
+  const [pendingPinLocation, setPendingPinLocation] = useState<{ lat: number; lng: number } | null>(null);
+
   // 環境変数からAPIキーを取得
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
@@ -65,13 +74,16 @@ export default function Home() {
   // モバイル版Street View表示用
   const [showMobileStreetView, setShowMobileStreetView] = useState(false);
 
+  // モバイルピン設置モード
+  const [isMobilePinMode, setIsMobilePinMode] = useState(false);
+
   // モバイル用新UI状態
   const [mobileMenuTab, setMobileMenuTab] = useState<MenuTab>("route");
   const routeOverlay = useOverlay(false);
   const helpOverlay = useOverlay(false);
 
   // デスクトップ用探検モードタブ状態
-  type DesktopTab = "route" | "explore";
+  type DesktopTab = "route" | "explore" | "pin";
   const [desktopTab, setDesktopTab] = useState<DesktopTab>("route");
 
   // 探検モード
@@ -91,23 +103,42 @@ export default function Home() {
       setTourHeading(heading);
     },
     onHazardApproach: (hazard) => {
-      setSelectedHazard(hazard);
+      // 通常ツアーはHazardPointのみ使用
+      if (isHazardPoint(hazard)) {
+        setSelectedHazard(hazard);
+      }
     },
     onTourEnd: () => {
       // ツアー終了時の処理
     },
   });
 
+  // 探検モードの停止地点を計算
+  const explorationStopPoints: TourStopPoint[] = useMemo(() => {
+    if (exploration.tourTarget === "my_hazard_points") {
+      // マイ危険ポイントを巡回
+      return myHazardPoints.pins;
+    } else {
+      // Safety Mapを巡回（選別された地点があればそちらを使用）
+      return exploration.selectedHazardPoints.length > 0
+        ? exploration.selectedHazardPoints
+        : displayedHazards;
+    }
+  }, [exploration.tourTarget, exploration.selectedHazardPoints, myHazardPoints.pins, displayedHazards]);
+
   // 探検モード用ツアーフック
   const explorationTour = useTour({
     routeCoordinates: explorationRouteCoordinates,
-    hazardPoints: displayedHazards,
+    stopPoints: explorationStopPoints,
     onPositionChange: (position, heading) => {
       setTourPosition(position);
       setExplorationTourHeading(heading);
     },
-    onHazardApproach: (hazard) => {
-      setSelectedHazard(hazard);
+    onHazardApproach: (stopPoint) => {
+      // HazardPointの場合はselectedHazardを設定
+      if (isHazardPoint(stopPoint)) {
+        setSelectedHazard(stopPoint);
+      }
       exploration.stopAtHazard();
     },
     onTourEnd: () => {
@@ -150,6 +181,12 @@ export default function Home() {
 
   // 地点追加ハンドラ（連続クリック用）
   const handleWaypointAdd = useCallback((lat: number, lng: number) => {
+    // ピン設置モードの場合（デスクトップ・モバイル共通）
+    if (desktopTab === "pin" || isMobilePinMode) {
+      setPendingPinLocation({ lat, lng });
+      return;
+    }
+
     // 探検モードの経路設定中
     if (exploration.state === "route_setting" && isExplorationDrawingRoute) {
       const hasStart = explorationWaypoints.some((wp) => wp.type === "start");
@@ -182,7 +219,7 @@ export default function Home() {
     // ルートをリセット
     setRouteCoordinates(null);
     setRouteDistance(null);
-  }, [waypoints, exploration.state, isExplorationDrawingRoute, explorationWaypoints]);
+  }, [waypoints, exploration.state, isExplorationDrawingRoute, explorationWaypoints, desktopTab, isMobilePinMode]);
 
   // ダブルクリックでゴール設定
   const handleWaypointDoubleClick = useCallback((lat: number, lng: number) => {
@@ -422,6 +459,7 @@ export default function Home() {
       exploration.exitExploration();
       setExplorationWaypoints([]);
       setIsExplorationDrawingRoute(false);
+      setIsMobilePinMode(false);
       // 経路検索時は自動で描画モードを有効化
       setIsDrawingRoute(true);
     } else if (tab === "help") {
@@ -431,18 +469,71 @@ export default function Home() {
       setExplorationWaypoints([]);
       setIsExplorationDrawingRoute(false);
       setIsDrawingRoute(false);
+      setIsMobilePinMode(false);
     } else if (tab === "explore") {
       // 探検モードを開始
       routeOverlay.close();
       helpOverlay.close();
       setIsDrawingRoute(false);
+      setIsMobilePinMode(false);
       exploration.startExploration();
       setExplorationWaypoints([]);
       setIsExplorationDrawingRoute(true); // 探検モード開始時は描画モードを有効化
+    } else if (tab === "pin") {
+      // ピン設置モードを開始
+      routeOverlay.close();
+      helpOverlay.close();
+      exploration.exitExploration();
+      setExplorationWaypoints([]);
+      setIsExplorationDrawingRoute(false);
+      setIsDrawingRoute(false);
+      setIsMobilePinMode(true);
     }
   }, [routeOverlay, helpOverlay, exploration]);
 
-  // 探検モードのツアー開始
+  // 探検モード：経路確定後、巡回対象選択へ進む（モバイル）
+  const handleExplorationProceedToTargetSelect = useCallback(async () => {
+    // 経路を計算
+    const startPoint = explorationWaypoints.find((wp) => wp.type === "start");
+    const endPoint = explorationWaypoints.find((wp) => wp.type === "end");
+
+    if (!startPoint || !endPoint) return;
+
+    const orderedWaypoints = sortWaypointsByRoute(explorationWaypoints);
+
+    try {
+      const route = await getWalkingRoute(orderedWaypoints);
+      if (route) {
+        setExplorationRouteCoordinates(route);
+        // 経路距離を計算
+        setExplorationRouteDistance(calculateRouteDistance(route));
+        // Safety Map用に危険地点を選別
+        const selectedPoints = selectHazardPointsForTour(allHazardPoints, route);
+        exploration.setSelectedHazardPoints(selectedPoints);
+        // 巡回対象選択画面へ
+        exploration.proceedToTargetSelect();
+      }
+    } catch (error) {
+      console.error("Route calculation failed:", error);
+    }
+  }, [explorationWaypoints, allHazardPoints, exploration]);
+
+  // 探検モード：巡回対象選択後にツアー開始（モバイル）
+  const handleExplorationTargetSelect = useCallback((target: TourTarget) => {
+    exploration.setTourTarget(target);
+    exploration.startTour();
+    // 少し待ってからツアー再生を開始（ルートが初期化されるまで待つ）
+    setTimeout(() => {
+      explorationTour.play();
+    }, 500);
+  }, [exploration, explorationTour]);
+
+  // 探検モード：巡回対象選択をキャンセル（経路設定に戻る）
+  const handleExplorationTargetSelectClose = useCallback(() => {
+    exploration.backToRouteSetting();
+  }, [exploration]);
+
+  // 探検モードのツアー開始（デスクトップ用 - 直接ツアー開始）
   const handleExplorationStartTour = useCallback(async () => {
     // 経路を計算
     const startPoint = explorationWaypoints.find((wp) => wp.type === "start");
@@ -506,6 +597,25 @@ export default function Home() {
   const explorationHasValidRoute = explorationWaypoints.some((wp) => wp.type === "start") &&
     explorationWaypoints.some((wp) => wp.type === "end");
 
+  // 巡回対象選択フェーズに進む
+  const handleProceedToTargetSelect = useCallback(() => {
+    if (!explorationRouteCoordinates) return;
+    // Safety Mapの自動選別を実行
+    const selected = selectHazardPointsForTour(displayedHazards, explorationRouteCoordinates);
+    exploration.setSelectedHazardPoints(selected);
+    exploration.proceedToTargetSelect();
+  }, [explorationRouteCoordinates, displayedHazards, exploration]);
+
+  // 巡回対象選択から経路設定に戻る
+  const handleBackToRouteSetting = useCallback(() => {
+    exploration.backToRouteSetting();
+  }, [exploration]);
+
+  // 巡回対象の変更
+  const handleTourTargetChange = useCallback((target: TourTarget) => {
+    exploration.setTourTarget(target);
+  }, [exploration]);
+
   // デスクトップ版探検モード：危険地点停止時のセリフインデックス
   const [desktopSpeechIndex, setDesktopSpeechIndex] = useState(0);
 
@@ -519,6 +629,19 @@ export default function Home() {
   // セリフを次に進める
   const handleDesktopSpeechNext = useCallback(() => {
     setDesktopSpeechIndex((prev) => Math.min(prev + 1, 2));
+  }, []);
+
+  // ピン設置モード：ピン選択
+  const handleMyHazardPinSelect = useCallback((pin: { id: string } | null) => {
+    setSelectedMyHazardPinId(pin?.id || null);
+  }, []);
+
+  // ピン設置モード：完了
+  const handlePinModeComplete = useCallback(() => {
+    setSelectedMyHazardPinId(null);
+    setPendingPinLocation(null);
+    // 経路検索モードに戻る
+    setDesktopTab("route");
   }, []);
 
   // デスクトップ用タブ切り替えハンドラ
@@ -537,6 +660,14 @@ export default function Home() {
       setExplorationWaypoints([]);
       setIsExplorationDrawingRoute(true);
       // 通常のルート設定をクリア
+      setIsDrawingRoute(false);
+    } else if (tab === "pin") {
+      // マイ危険ポイント設置モード
+      exploration.exitExploration();
+      explorationTour.stop();
+      setExplorationWaypoints([]);
+      setIsExplorationDrawingRoute(false);
+      setExplorationRouteCoordinates(null);
       setIsDrawingRoute(false);
     }
   }, [exploration, explorationTour]);
@@ -600,6 +731,24 @@ export default function Home() {
             >
               通学路探検
             </button>
+            <button
+              onClick={() => handleDesktopTabChange("pin")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                desktopTab === "pin"
+                  ? "bg-white text-purple-600"
+                  : "text-white/80 hover:text-white hover:bg-blue-500/50"
+              }`}
+            >
+              <MapPin className="w-4 h-4" />
+              マイ危険ポイント設置
+              {myHazardPoints.pins.length > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  desktopTab === "pin" ? "bg-purple-100" : "bg-white/20"
+                }`}>
+                  {myHazardPoints.pins.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -607,26 +756,31 @@ export default function Home() {
       {/* メインコンテンツ */}
       {/* デスクトップ: 横並びレイアウト */}
       <div className="flex-1 hidden lg:flex lg:flex-row overflow-hidden">
-        {/* 左側：地図エリア（60%） */}
-        <div className="lg:w-3/5 h-full relative">
+        {/* 左側：地図エリア（60%、ピン設置モード時は100%） */}
+        <div className={`h-full relative ${desktopTab === "pin" ? "w-full" : "lg:w-3/5"}`}>
           <MapContainer
-            waypoints={desktopTab === "explore" ? explorationWaypoints : waypoints}
+            waypoints={desktopTab === "explore" ? explorationWaypoints : (desktopTab === "pin" ? [] : waypoints)}
             onWaypointAdd={handleWaypointAdd}
             onWaypointDoubleClick={handleWaypointDoubleClick}
             onWaypointDelete={handleWaypointDelete}
             onWaypointMove={handleWaypointMove}
-            isDrawingRoute={desktopTab === "explore" ? isExplorationDrawingRoute : isDrawingRoute}
-            routeCoordinates={desktopTab === "explore" ? explorationRouteCoordinates : routeCoordinates}
+            isDrawingRoute={desktopTab === "explore" ? isExplorationDrawingRoute : (desktopTab === "pin" ? true : isDrawingRoute)}
+            routeCoordinates={desktopTab === "explore" ? explorationRouteCoordinates : (desktopTab === "pin" ? null : routeCoordinates)}
             onRouteDrag={handleRouteDrag}
             hazardPoints={displayedHazards}
             onHazardClick={handleHazardClick}
             selectedHazardId={selectedHazard?.id || null}
+            // マイ危険ポイント用プロパティ
+            myHazardPoints={myHazardPoints.pins}
+            onMyHazardPinClick={(pin) => handleMyHazardPinSelect(pin)}
+            selectedMyHazardPinId={selectedMyHazardPinId}
+            showMyHazardPopup={desktopTab !== "pin"}
             tourPosition={tourPosition}
             tourHeading={desktopTab === "explore" ? explorationTourHeading : tourHeading}
             isTourActive={desktopTab === "explore" ? (exploration.state === "touring" || exploration.state === "hazard_stop") : isTourActive}
           >
-            {/* 安全ガイドオーバーレイ（探検モード中は非表示） */}
-            {desktopTab !== "explore" && (
+            {/* 安全ガイドオーバーレイ（探検モード・ピン設置モード中は非表示） */}
+            {desktopTab !== "explore" && desktopTab !== "pin" && (
               <SafetyGuideOverlay
                 selectedHazard={selectedHazard}
                 onClose={handleCloseGuide}
@@ -679,6 +833,14 @@ export default function Home() {
                   onStartTour={handleExplorationStartTour}
                   onExit={handleDesktopExplorationExit}
                   onReset={handleExplorationRetry}
+                  // 巡回対象選択用
+                  tourTarget={exploration.tourTarget}
+                  onTourTargetChange={handleTourTargetChange}
+                  myHazardPointCount={myHazardPoints.pins.length}
+                  selectedHazardPoints={exploration.selectedHazardPoints}
+                  onProceedToTargetSelect={handleProceedToTargetSelect}
+                  onBackToRouteSetting={handleBackToRouteSetting}
+                  // ツアー用
                   apiKey={googleMapsApiKey}
                   routeCoordinates={explorationRouteCoordinates || []}
                   hazardPoints={displayedHazards}
@@ -723,10 +885,26 @@ export default function Home() {
               )}
             </>
           )}
+
+          {/* デスクトップ版ピン設置モード */}
+          {desktopTab === "pin" && (
+            <MyHazardPointModeDesktop
+              pins={myHazardPoints.pins}
+              onPinAdd={(pin) => myHazardPoints.add(pin)}
+              onPinUpdate={(id, updates) => myHazardPoints.update(id, updates)}
+              onPinDelete={(id) => myHazardPoints.remove(id)}
+              findNearby={myHazardPoints.findNearby}
+              selectedPinId={selectedMyHazardPinId}
+              onPinSelect={handleMyHazardPinSelect}
+              onComplete={handlePinModeComplete}
+              mapClickLocation={pendingPinLocation}
+              onMapClickLocationClear={() => setPendingPinLocation(null)}
+            />
+          )}
         </div>
 
-        {/* 右側：Street Viewエリア（40%） */}
-        <div className="lg:w-2/5 h-full flex flex-col overflow-hidden bg-gray-50">
+        {/* 右側：Street Viewエリア（40%） - ピン設置モード時は非表示 */}
+        <div className={`lg:w-2/5 h-full flex flex-col overflow-hidden bg-gray-50 ${desktopTab === "pin" ? "hidden" : ""}`}>
           {/* 通常モード：Street Viewのみ */}
           {desktopTab === "route" && (
             <div className="flex-1 p-3 min-h-0">
@@ -773,10 +951,13 @@ export default function Home() {
       {/* デスクトップ版修了証モーダル */}
       {desktopTab === "explore" && exploration.state === "completed" && (
         <CertificateModalDesktop
-          hazardCount={displayedHazards.length}
+          hazardCount={exploration.tourTarget === "my_hazard_points" ? myHazardPoints.pins.length : exploration.selectedHazardPoints.length}
           routeDistance={explorationRouteDistance}
           onRetry={handleExplorationRetry}
           onExit={handleDesktopExplorationExit}
+          tourTarget={exploration.tourTarget}
+          myHazardPoints={myHazardPoints.pins}
+          checkedHazardPoints={exploration.selectedHazardPoints}
         />
       )}
 
@@ -786,6 +967,7 @@ export default function Home() {
         <MobileHeader
           activeTab={mobileMenuTab}
           onTabChange={handleMobileMenuTabChange}
+          pinCount={myHazardPoints.pins.length}
         />
 
         {/* 地図（フルスクリーン） */}
@@ -796,12 +978,17 @@ export default function Home() {
             onWaypointDoubleClick={handleWaypointDoubleClick}
             onWaypointDelete={handleWaypointDelete}
             onWaypointMove={handleWaypointMove}
-            isDrawingRoute={exploration.state === "route_setting" ? isExplorationDrawingRoute : isDrawingRoute}
+            isDrawingRoute={exploration.state === "route_setting" ? isExplorationDrawingRoute : (isMobilePinMode ? true : isDrawingRoute)}
             routeCoordinates={exploration.state === "route_setting" ? explorationRouteCoordinates : routeCoordinates}
             onRouteDrag={handleRouteDrag}
             hazardPoints={displayedHazards}
             onHazardClick={handleHazardClick}
             selectedHazardId={selectedHazard?.id || null}
+            // マイ危険ポイント用プロパティ
+            myHazardPoints={myHazardPoints.pins}
+            onMyHazardPinClick={(pin) => setSelectedMyHazardPinId(pin.id)}
+            selectedMyHazardPinId={selectedMyHazardPinId}
+            showMyHazardPopup={!isMobilePinMode}
             tourPosition={tourPosition}
             tourHeading={tourHeading}
             isTourActive={isTourActive}
@@ -873,7 +1060,7 @@ export default function Home() {
           <ExplorationMode
             state={exploration.state}
             hasValidRoute={explorationHasValidRoute}
-            onStartTour={handleExplorationStartTour}
+            onStartTour={handleExplorationProceedToTargetSelect}
             onExit={handleExplorationExit}
             // ツアー用プロパティ
             apiKey={googleMapsApiKey}
@@ -898,6 +1085,33 @@ export default function Home() {
             // 完了画面用プロパティ
             routeDistance={explorationRouteDistance}
             onRetry={handleExplorationRetry}
+            // 巡回対象選択用プロパティ
+            myHazardPointCount={myHazardPoints.pins.length}
+            selectedHazardPoints={exploration.selectedHazardPoints}
+            onTargetSelectClose={handleExplorationTargetSelectClose}
+            onTargetSelect={handleExplorationTargetSelect}
+            // 完了画面用: Phase 9
+            tourTarget={exploration.tourTarget}
+            myHazardPoints={myHazardPoints.pins}
+          />
+        )}
+
+        {/* モバイルピン設置モード */}
+        {isMobilePinMode && (
+          <MyHazardPointModeMobile
+            pins={myHazardPoints.pins}
+            onPinAdd={myHazardPoints.add}
+            onPinUpdate={myHazardPoints.update}
+            onPinDelete={myHazardPoints.remove}
+            findNearby={myHazardPoints.findNearby}
+            selectedPinId={selectedMyHazardPinId}
+            onPinSelect={(pin) => setSelectedMyHazardPinId(pin?.id ?? null)}
+            mapClickLocation={pendingPinLocation}
+            onMapClickLocationClear={() => setPendingPinLocation(null)}
+            onClose={() => {
+              setIsMobilePinMode(false);
+              setMobileMenuTab("route");
+            }}
           />
         )}
       </div>

@@ -12,14 +12,14 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { TourStatus } from "@/lib/useTour";
-import { HazardPoint, HAZARD_TYPE_INFO } from "@/lib/types";
+import { TourStopPoint, HAZARD_TYPE_INFO, isHazardPoint, isMyHazardPoint, MY_HAZARD_REASON_INFO } from "@/lib/types";
 
 interface TourControlsProps {
   status: TourStatus;
   progress: number;
   speed: number;
   isReady: boolean;
-  nearbyHazard: HazardPoint | null;
+  nearbyHazard: TourStopPoint | null;
   onPlay: () => void;
   onPause: () => void;
   onStop: () => void;
@@ -94,17 +94,33 @@ export function TourControls({
           <div
             className="flex items-center gap-2 p-2 rounded text-sm"
             style={{
-              backgroundColor: `${HAZARD_TYPE_INFO[nearbyHazard.type].color}20`,
-              borderLeft: `3px solid ${HAZARD_TYPE_INFO[nearbyHazard.type].color}`,
+              backgroundColor: isHazardPoint(nearbyHazard)
+                ? `${HAZARD_TYPE_INFO[nearbyHazard.type].color}20`
+                : "#8B5CF620",
+              borderLeft: isHazardPoint(nearbyHazard)
+                ? `3px solid ${HAZARD_TYPE_INFO[nearbyHazard.type].color}`
+                : "3px solid #8B5CF6",
             }}
           >
             <AlertTriangle
               className="h-4 w-4 flex-shrink-0"
-              style={{ color: HAZARD_TYPE_INFO[nearbyHazard.type].color }}
+              style={{
+                color: isHazardPoint(nearbyHazard)
+                  ? HAZARD_TYPE_INFO[nearbyHazard.type].color
+                  : "#8B5CF6",
+              }}
             />
             <div>
-              <p className="font-medium text-xs">{nearbyHazard.title}</p>
-              <p className="text-xs text-gray-600">危険地点に接近しました</p>
+              <p className="font-medium text-xs">
+                {isHazardPoint(nearbyHazard)
+                  ? nearbyHazard.title
+                  : isMyHazardPoint(nearbyHazard)
+                    ? MY_HAZARD_REASON_INFO[nearbyHazard.reasons[0]].label
+                    : "危険地点"}
+              </p>
+              <p className="text-xs text-gray-600">
+                {isMyHazardPoint(nearbyHazard) ? "あなたのピンに接近しました" : "危険地点に接近しました"}
+              </p>
             </div>
           </div>
         )}

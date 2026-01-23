@@ -1,8 +1,9 @@
 "use client";
 
 import { ExplorationState } from "@/lib/useExplorationMode";
-import { HazardPoint, Waypoint } from "@/lib/types";
+import { HazardPoint, Waypoint, TourTarget, TourStopPoint } from "@/lib/types";
 import { ExplorationControlsDesktop } from "./ExplorationControlsDesktop";
+import { TourTargetSelector } from "./TourTargetSelector";
 
 interface ExplorationModeDesktopProps {
   // 状態
@@ -18,6 +19,14 @@ interface ExplorationModeDesktopProps {
   onExit: () => void;
   onReset: () => void;
 
+  // 巡回対象選択用
+  tourTarget?: TourTarget | null;
+  onTourTargetChange?: (target: TourTarget) => void;
+  myHazardPointCount?: number;
+  selectedHazardPoints?: HazardPoint[];
+  onProceedToTargetSelect?: () => void;
+  onBackToRouteSetting?: () => void;
+
   // ツアー用プロパティ
   apiKey?: string;
   routeCoordinates?: [number, number][];
@@ -29,7 +38,7 @@ interface ExplorationModeDesktopProps {
   progress?: number;
   speed?: number;
   isPlaying?: boolean;
-  nearbyHazard?: HazardPoint | null;
+  nearbyHazard?: TourStopPoint | null;
   onPlay?: () => void;
   onPause?: () => void;
   onForward?: () => void;
@@ -51,6 +60,13 @@ export function ExplorationModeDesktop({
   onStartTour,
   onExit,
   onReset,
+  // 巡回対象選択用
+  tourTarget = null,
+  onTourTargetChange = () => {},
+  myHazardPointCount = 0,
+  selectedHazardPoints = [],
+  onProceedToTargetSelect = () => {},
+  onBackToRouteSetting = () => {},
   // ツアー用
   apiKey = "",
   routeCoordinates = [],
@@ -82,9 +98,29 @@ export function ExplorationModeDesktop({
         waypoints={waypoints}
         hasValidRoute={hasValidRoute}
         routeDistance={routeDistance}
-        onStartTour={onStartTour}
+        onStartTour={onProceedToTargetSelect}
         onReset={onReset}
         onExit={onExit}
+      />
+    );
+  }
+
+  // 巡回対象選択中の場合
+  if (state === "target_select") {
+    // 選択可能かどうか
+    const canStart =
+      (tourTarget === "my_hazard_points" && myHazardPointCount > 0) ||
+      (tourTarget === "safety_map" && selectedHazardPoints.length > 0);
+
+    return (
+      <TourTargetSelector
+        selectedTarget={tourTarget}
+        onTargetChange={onTourTargetChange}
+        myHazardPointCount={myHazardPointCount}
+        selectedHazardPoints={selectedHazardPoints}
+        onStartTour={onStartTour}
+        onBack={onBackToRouteSetting}
+        canStartTour={canStart}
       />
     );
   }

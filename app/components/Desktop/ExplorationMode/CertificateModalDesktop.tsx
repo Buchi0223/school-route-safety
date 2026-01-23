@@ -1,16 +1,21 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { RotateCcw, Home, Award } from "lucide-react";
+import { RotateCcw, Home, Award, MapPin, Shield } from "lucide-react";
 import Image from "next/image";
+import { TourTarget, MyHazardPoint, HazardPoint, MyHazardReason, MY_HAZARD_REASON_INFO, HAZARD_TYPE_INFO, HazardType } from "@/lib/types";
 
 interface CertificateModalDesktopProps {
   hazardCount: number;
   routeDistance: number;
   onRetry: () => void;
   onExit: () => void;
+  // Phase 9: 巡回対象連携
+  tourTarget?: TourTarget | null;
+  myHazardPoints?: MyHazardPoint[];
+  checkedHazardPoints?: HazardPoint[];
 }
 
 // 紙吹雪のパーティクル
@@ -80,6 +85,9 @@ export const CertificateModalDesktop = memo(function CertificateModalDesktop({
   routeDistance,
   onRetry,
   onExit,
+  tourTarget,
+  myHazardPoints = [],
+  checkedHazardPoints = [],
 }: CertificateModalDesktopProps) {
   const [isVisible, setIsVisible] = useState(false);
   const today = new Date();
@@ -90,6 +98,42 @@ export const CertificateModalDesktop = memo(function CertificateModalDesktop({
     const timer = setTimeout(() => setIsVisible(true), 100);
     return () => clearTimeout(timer);
   }, []);
+
+  // マイ危険ポイントの理由別サマリー
+  const reasonSummary = useMemo(() => {
+    if (tourTarget !== "my_hazard_points" || myHazardPoints.length === 0) return null;
+    const counts: Record<MyHazardReason, number> = {} as Record<MyHazardReason, number>;
+    myHazardPoints.forEach(pin => {
+      pin.reasons.forEach(reason => {
+        counts[reason] = (counts[reason] || 0) + 1;
+      });
+    });
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([reason, count]) => ({
+        reason: reason as MyHazardReason,
+        count,
+        label: MY_HAZARD_REASON_INFO[reason as MyHazardReason].label,
+      }));
+  }, [tourTarget, myHazardPoints]);
+
+  // Safety Mapのタイプ別サマリー
+  const typeSummary = useMemo(() => {
+    if (tourTarget !== "safety_map" || checkedHazardPoints.length === 0) return null;
+    const counts: Record<HazardType, number> = {} as Record<HazardType, number>;
+    checkedHazardPoints.forEach(point => {
+      counts[point.type] = (counts[point.type] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([type, count]) => ({
+        type: type as HazardType,
+        count,
+        label: HAZARD_TYPE_INFO[type as HazardType].label,
+        icon: HAZARD_TYPE_INFO[type as HazardType].icon,
+      }));
+  }, [tourTarget, checkedHazardPoints]);
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center">
@@ -148,15 +192,42 @@ export const CertificateModalDesktop = memo(function CertificateModalDesktop({
             </p>
           </div>
 
+          {/* 巡回対象バッジ */}
+          {tourTarget && (
+            <div className="flex justify-center mb-4">
+              <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-bold ${
+                tourTarget === "my_hazard_points"
+                  ? "bg-purple-100 text-purple-700"
+                  : "bg-blue-100 text-blue-700"
+              }`}>
+                {tourTarget === "my_hazard_points" ? (
+                  <>
+                    <MapPin className="w-4 h-4" />
+                    マイ危険ポイントで探検
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-4 h-4" />
+                    Safety Mapで探検
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
           {/* 実績 */}
-          <div className="bg-white/80 rounded-xl p-4 mb-6 border border-yellow-200 shadow-inner">
+          <div className="bg-white/80 rounded-xl p-4 mb-4 border border-yellow-200 shadow-inner">
             <h3 className="text-sm font-bold text-gray-600 mb-3 text-center">
               学習実績
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
-                <p className="text-3xl font-bold text-orange-500">{hazardCount}</p>
-                <p className="text-xs text-gray-500">確認した危険地点</p>
+                <p className={`text-3xl font-bold ${
+                  tourTarget === "my_hazard_points" ? "text-purple-500" : "text-orange-500"
+                }`}>{hazardCount}</p>
+                <p className="text-xs text-gray-500">
+                  {tourTarget === "my_hazard_points" ? "設置したピン" : "確認した危険地点"}
+                </p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-blue-500">
@@ -167,6 +238,34 @@ export const CertificateModalDesktop = memo(function CertificateModalDesktop({
               </div>
             </div>
           </div>
+
+          {/* マイ危険ポイント: 理由別サマリー */}
+          {reasonSummary && reasonSummary.length > 0 && (
+            <div className="bg-purple-50 rounded-xl p-3 mb-4 border border-purple-200">
+              <p className="text-xs font-bold text-purple-600 mb-2 text-center">危険の理由</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {reasonSummary.map(({ reason, label, count }) => (
+                  <span key={reason} className="text-xs bg-white px-3 py-1 rounded-full text-purple-700 border border-purple-200">
+                    {label} ({count})
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Safety Map: タイプ別サマリー */}
+          {typeSummary && typeSummary.length > 0 && (
+            <div className="bg-blue-50 rounded-xl p-3 mb-4 border border-blue-200">
+              <p className="text-xs font-bold text-blue-600 mb-2 text-center">確認した危険地点の種類</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {typeSummary.map(({ type, icon, count }) => (
+                  <span key={type} className="text-xs bg-white px-3 py-1 rounded-full text-gray-700 border border-blue-200">
+                    {icon} ×{count}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 日付 */}
           <div className="text-center mb-6">

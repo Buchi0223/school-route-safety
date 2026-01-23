@@ -1,14 +1,19 @@
 "use client";
 
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { Trophy, MapPin, Footprints, Home, RotateCcw } from "lucide-react";
+import { Trophy, MapPin, Footprints, Home, RotateCcw, Shield } from "lucide-react";
+import { TourTarget, MyHazardPoint, HazardPoint, MyHazardReason, MY_HAZARD_REASON_INFO, HAZARD_TYPE_INFO, HazardType } from "@/lib/types";
 
 interface CertificateModalProps {
   hazardCount: number;
   distance: number; // メートル単位
   onRetry: () => void;
   onHome: () => void;
+  // Phase 9: 巡回対象連携
+  tourTarget?: TourTarget | null;
+  myHazardPoints?: MyHazardPoint[];
+  checkedHazardPoints?: HazardPoint[];
 }
 
 export const CertificateModal = memo(function CertificateModal({
@@ -16,6 +21,9 @@ export const CertificateModal = memo(function CertificateModal({
   distance,
   onRetry,
   onHome,
+  tourTarget,
+  myHazardPoints = [],
+  checkedHazardPoints = [],
 }: CertificateModalProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -31,6 +39,42 @@ export const CertificateModal = memo(function CertificateModal({
       clearTimeout(timer2);
     };
   }, []);
+
+  // マイ危険ポイントの理由別サマリー
+  const reasonSummary = useMemo(() => {
+    if (tourTarget !== "my_hazard_points" || myHazardPoints.length === 0) return null;
+    const counts: Record<MyHazardReason, number> = {} as Record<MyHazardReason, number>;
+    myHazardPoints.forEach(pin => {
+      pin.reasons.forEach(reason => {
+        counts[reason] = (counts[reason] || 0) + 1;
+      });
+    });
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([reason, count]) => ({
+        reason: reason as MyHazardReason,
+        count,
+        label: MY_HAZARD_REASON_INFO[reason as MyHazardReason].label,
+      }));
+  }, [tourTarget, myHazardPoints]);
+
+  // Safety Mapのタイプ別サマリー
+  const typeSummary = useMemo(() => {
+    if (tourTarget !== "safety_map" || checkedHazardPoints.length === 0) return null;
+    const counts: Record<HazardType, number> = {} as Record<HazardType, number>;
+    checkedHazardPoints.forEach(point => {
+      counts[point.type] = (counts[point.type] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([type, count]) => ({
+        type: type as HazardType,
+        count,
+        label: HAZARD_TYPE_INFO[type as HazardType].label,
+        icon: HAZARD_TYPE_INFO[type as HazardType].icon,
+      }));
+  }, [tourTarget, checkedHazardPoints]);
 
   // 距離をフォーマット（メートル or キロメートル）
   const formatDistance = (meters: number) => {
@@ -116,14 +160,43 @@ export const CertificateModal = memo(function CertificateModal({
                 です！
               </p>
 
+              {/* 巡回対象バッジ */}
+              {tourTarget && (
+                <div className="mb-4">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
+                    tourTarget === "my_hazard_points"
+                      ? "bg-purple-100 text-purple-700"
+                      : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {tourTarget === "my_hazard_points" ? (
+                      <>
+                        <MapPin className="w-3 h-3" />
+                        マイ危険ポイント
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-3 h-3" />
+                        Safety Map
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
+
               {/* 統計情報 */}
-              <div className="flex justify-center gap-6 my-6">
+              <div className="flex justify-center gap-6 my-4">
                 <div className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-1">
-                    <MapPin className="w-6 h-6 text-red-500" />
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-1 ${
+                    tourTarget === "my_hazard_points" ? "bg-purple-100" : "bg-red-100"
+                  }`}>
+                    <MapPin className={`w-6 h-6 ${
+                      tourTarget === "my_hazard_points" ? "text-purple-500" : "text-red-500"
+                    }`} />
                   </div>
                   <span className="text-2xl font-bold text-gray-800">{hazardCount}</span>
-                  <span className="text-xs text-gray-500">危険地点</span>
+                  <span className="text-xs text-gray-500">
+                    {tourTarget === "my_hazard_points" ? "設置ピン" : "危険地点"}
+                  </span>
                 </div>
                 <div className="flex flex-col items-center">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-1">
@@ -133,6 +206,34 @@ export const CertificateModal = memo(function CertificateModal({
                   <span className="text-xs text-gray-500">あるいた距離</span>
                 </div>
               </div>
+
+              {/* マイ危険ポイント: 理由別サマリー */}
+              {reasonSummary && reasonSummary.length > 0 && (
+                <div className="bg-purple-50 rounded-lg p-2 mb-4 mx-2">
+                  <p className="text-[10px] font-bold text-purple-600 mb-1">危険の理由</p>
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {reasonSummary.map(({ reason, label }) => (
+                      <span key={reason} className="text-[10px] bg-white px-2 py-0.5 rounded text-purple-700">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Safety Map: タイプ別サマリー */}
+              {typeSummary && typeSummary.length > 0 && (
+                <div className="bg-blue-50 rounded-lg p-2 mb-4 mx-2">
+                  <p className="text-[10px] font-bold text-blue-600 mb-1">確認した危険地点</p>
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {typeSummary.map(({ type, icon, count }) => (
+                      <span key={type} className="text-[10px] bg-white px-2 py-0.5 rounded text-gray-700">
+                        {icon} ×{count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 日付 */}
               <p className="text-sm text-gray-600 mb-4">{formatDate()}</p>

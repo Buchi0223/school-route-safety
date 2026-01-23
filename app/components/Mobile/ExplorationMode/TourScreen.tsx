@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { X, Loader2, MapPin } from "lucide-react";
 import { TourControlsCompact } from "./TourControlsCompact";
-import { HazardPoint } from "@/lib/types";
+import { HazardPoint, TourStopPoint, isMyHazardPoint } from "@/lib/types";
 
 // MiniMapを動的インポート（SSR無効）
 const MiniMap = dynamic(
@@ -36,7 +36,7 @@ interface TourScreenProps {
   progress: number;
   speed: number;
   isPlaying: boolean;
-  nearbyHazard: HazardPoint | null;
+  nearbyHazard: TourStopPoint | null;
   // コントロール
   onPlay: () => void;
   onPause: () => void;
@@ -168,8 +168,10 @@ export const TourScreen = memo(function TourScreen({
           <MapPin className="w-5 h-5 text-yellow-400" />
           <span className="text-white font-bold text-sm">探検中</span>
           {nearbyHazard && (
-            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
-              危険地点付近
+            <span className={`text-white text-xs px-2 py-0.5 rounded-full animate-pulse ${
+              isMyHazardPoint(nearbyHazard) ? "bg-purple-500" : "bg-red-500"
+            }`}>
+              {isMyHazardPoint(nearbyHazard) ? "あなたのピン付近" : "危険地点付近"}
             </span>
           )}
         </div>

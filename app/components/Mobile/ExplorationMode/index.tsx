@@ -5,7 +5,8 @@ import { RouteSetup } from "./RouteSetup";
 import { TourScreen } from "./TourScreen";
 import { HazardStopScreen } from "./HazardStopScreen";
 import { CertificateModal } from "./CertificateModal";
-import { HazardPoint } from "@/lib/types";
+import { TourTargetBottomSheet } from "./TourTargetBottomSheet";
+import { HazardPoint, TourStopPoint, TourTarget, MyHazardPoint } from "@/lib/types";
 
 interface ExplorationModeProps {
   state: ExplorationState;
@@ -23,7 +24,7 @@ interface ExplorationModeProps {
   progress?: number;
   speed?: number;
   isPlaying?: boolean;
-  nearbyHazard?: HazardPoint | null;
+  nearbyHazard?: TourStopPoint | null;
   onPlay?: () => void;
   onPause?: () => void;
   onForward?: () => void;
@@ -35,6 +36,15 @@ interface ExplorationModeProps {
   // 完了画面用プロパティ
   routeDistance?: number;
   onRetry?: () => void;
+  // 巡回対象選択用プロパティ
+  showTargetSelect?: boolean;
+  myHazardPointCount?: number;
+  selectedHazardPoints?: HazardPoint[];
+  onTargetSelectClose?: () => void;
+  onTargetSelect?: (target: TourTarget) => void;
+  // 完了画面用: Phase 9
+  tourTarget?: TourTarget | null;
+  myHazardPoints?: MyHazardPoint[];
 }
 
 export function ExplorationMode({
@@ -65,6 +75,15 @@ export function ExplorationMode({
   // 完了画面用プロパティ
   routeDistance = 0,
   onRetry = () => {},
+  // 巡回対象選択用プロパティ
+  showTargetSelect = false,
+  myHazardPointCount = 0,
+  selectedHazardPoints = [],
+  onTargetSelectClose = () => {},
+  onTargetSelect = () => {},
+  // 完了画面用: Phase 9
+  tourTarget = null,
+  myHazardPoints = [],
 }: ExplorationModeProps) {
   // 経路設定中の場合
   if (state === "route_setting") {
@@ -119,8 +138,10 @@ export function ExplorationMode({
 
   // 完了画面
   if (state === "completed") {
-    // 経路上の危険地点数を計算
-    const hazardCount = hazardPoints.length;
+    // 巡回対象に応じた地点数を計算
+    const hazardCount = tourTarget === "my_hazard_points"
+      ? myHazardPoints.length
+      : selectedHazardPoints.length;
 
     return (
       <CertificateModal
@@ -128,7 +149,33 @@ export function ExplorationMode({
         distance={routeDistance}
         onRetry={onRetry}
         onHome={onExit}
+        tourTarget={tourTarget}
+        myHazardPoints={myHazardPoints}
+        checkedHazardPoints={selectedHazardPoints}
       />
+    );
+  }
+
+  // 巡回対象選択画面（ボトムシート）
+  // state === "target_select" または showTargetSelect が true の場合
+  if (state === "target_select" || showTargetSelect) {
+    return (
+      <>
+        {/* 経路設定画面を背景に表示 */}
+        <RouteSetup
+          hasValidRoute={hasValidRoute}
+          onStartTour={() => {}} // ボトムシート表示中は無効化
+          onExit={onExit}
+        />
+        {/* 巡回対象選択ボトムシート */}
+        <TourTargetBottomSheet
+          isOpen={true}
+          onClose={onTargetSelectClose}
+          onStartTour={onTargetSelect}
+          myHazardPointCount={myHazardPointCount}
+          selectedHazardPoints={selectedHazardPoints}
+        />
+      </>
     );
   }
 

@@ -4,7 +4,7 @@ import { memo, useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { CharacterBubble } from "./CharacterBubble";
-import { HazardPoint, HAZARD_TYPE_INFO } from "@/lib/types";
+import { TourStopPoint, HAZARD_TYPE_INFO, isHazardPoint, isMyHazardPoint, MY_HAZARD_REASON_INFO } from "@/lib/types";
 
 // MiniMapを動的インポート（SSR無効）
 const MiniMap = dynamic(
@@ -42,7 +42,7 @@ const SPEECH_SEQUENCE = [
 
 interface HazardStopScreenProps {
   apiKey: string;
-  hazard: HazardPoint;
+  hazard: TourStopPoint;
   routeCoordinates: [number, number][];
   currentPosition: [number, number] | null;
   heading: number;
@@ -130,32 +130,50 @@ export const HazardStopScreen = memo(function HazardStopScreen({
     }
   };
 
-  const hazardInfo = HAZARD_TYPE_INFO[hazard.type];
+  const isMyPin = isMyHazardPoint(hazard);
+  const hazardInfo = isHazardPoint(hazard) ? HAZARD_TYPE_INFO[hazard.type] : null;
+
+  // マイ危険ポイント用の表示情報
+  const myPinInfo = isMyPin ? {
+    icon: "📍",
+    color: "#8B5CF6",
+    label: "あなたが立てたピン",
+    title: hazard.reasons.map(r => MY_HAZARD_REASON_INFO[r].label).join("、"),
+    description: hazard.reasons.map(r => MY_HAZARD_REASON_INFO[r].description).join("。"),
+    safetyTips: hazard.reasonDetail ? [hazard.reasonDetail] : [],
+  } : null;
+
   const currentSpeech = SPEECH_SEQUENCE[speechIndex];
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* ヘッダー */}
-      <div className="h-14 bg-gradient-to-r from-red-600 to-orange-500 flex items-center justify-center px-4 shrink-0">
+      <div className={`h-14 flex items-center justify-center px-4 shrink-0 ${
+        isMyPin
+          ? "bg-gradient-to-r from-purple-600 to-purple-500"
+          : "bg-gradient-to-r from-red-600 to-orange-500"
+      }`}>
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-6 h-6 text-white animate-pulse" />
-          <span className="text-white font-bold">危険地点に到着！</span>
+          <span className="text-white font-bold">
+            {isMyPin ? "あなたのピンに到着！" : "危険地点に到着！"}
+          </span>
         </div>
       </div>
 
       {/* 危険地点情報バー */}
       <div className="bg-white/95 backdrop-blur-sm px-4 py-2 border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{hazardInfo.icon}</span>
+          <span className="text-2xl">{isMyPin ? myPinInfo!.icon : hazardInfo!.icon}</span>
           <div>
             <span
               className="px-2 py-0.5 rounded text-xs text-white"
-              style={{ backgroundColor: hazardInfo.color }}
+              style={{ backgroundColor: isMyPin ? myPinInfo!.color : hazardInfo!.color }}
             >
-              {hazardInfo.label}
+              {isMyPin ? myPinInfo!.label : hazardInfo!.label}
             </span>
             <p className="text-sm font-medium text-gray-800 mt-0.5">
-              {hazard.title}
+              {isMyPin ? myPinInfo!.title : (isHazardPoint(hazard) ? hazard.title : "")}
             </p>
           </div>
         </div>
@@ -220,20 +238,25 @@ export const HazardStopScreen = memo(function HazardStopScreen({
       {/* 下部の説明テキスト */}
       <div className="bg-white/95 backdrop-blur-sm px-4 py-3 shrink-0">
         <p className="text-xs text-gray-600 text-center">
-          {hazard.description}
+          {isMyPin ? myPinInfo!.description : (isHazardPoint(hazard) ? hazard.description : "")}
         </p>
-        {hazard.safetyTips && hazard.safetyTips.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1 justify-center">
-            {hazard.safetyTips.slice(0, 2).map((tip, index) => (
-              <span
-                key={index}
-                className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded"
-              >
-                {tip}
-              </span>
-            ))}
-          </div>
-        )}
+        {(() => {
+          const tips = isMyPin ? myPinInfo!.safetyTips : (isHazardPoint(hazard) ? hazard.safetyTips : []);
+          return tips && tips.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1 justify-center">
+              {tips.slice(0, 2).map((tip, index) => (
+                <span
+                  key={index}
+                  className={`text-[10px] px-2 py-0.5 rounded ${
+                    isMyPin ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                  }`}
+                >
+                  {tip}
+                </span>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { memo, useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExplorationState } from "@/lib/useExplorationMode";
-import { HazardPoint } from "@/lib/types";
+import { TourStopPoint, isHazardPoint, isMyHazardPoint, MY_HAZARD_REASON_INFO } from "@/lib/types";
 import {
   MousePointer,
   MousePointerClick,
@@ -17,7 +17,7 @@ import Image from "next/image";
 
 interface GuidePanelDesktopProps {
   state: ExplorationState;
-  nearbyHazard?: HazardPoint | null;
+  nearbyHazard?: TourStopPoint | null;
   onResumeFromHazard?: () => void;
   // 危険地点停止時のセリフ進行用
   speechIndex?: number;
@@ -168,15 +168,48 @@ export const GuidePanelDesktop = memo(function GuidePanelDesktop({
       }
     };
 
+    // マイ危険ポイントの場合の情報を取得
+    const isMyPin = isMyHazardPoint(nearbyHazard);
+    const headerBgColor = isMyPin ? "bg-purple-50" : "bg-red-50";
+    const headerBorderColor = isMyPin ? "border-purple-200" : "border-red-200";
+    const headerIcon = isMyPin ? (
+      <MapPin className="h-5 w-5 text-purple-500" />
+    ) : (
+      <AlertTriangle className="h-5 w-5 text-red-500" />
+    );
+
+    let title = "";
+    let subtitle = "";
+    let checkPoints: string[] = [];
+    let safetyTips: string[] = [];
+
+    if (isHazardPoint(nearbyHazard)) {
+      title = nearbyHazard.title;
+      subtitle = nearbyHazard.type;
+      checkPoints = nearbyHazard.checkPoints || [];
+      safetyTips = nearbyHazard.safetyTips || [];
+    } else if (isMyHazardPoint(nearbyHazard)) {
+      const reasonLabels = nearbyHazard.reasons.map(r => MY_HAZARD_REASON_INFO[r].label);
+      title = reasonLabels.length === 1
+        ? reasonLabels[0]
+        : `${reasonLabels[0]} 他${reasonLabels.length - 1}件`;
+      subtitle = "あなたが立てたピン";
+      // マイ危険ポイント用のチェックポイントを生成
+      checkPoints = nearbyHazard.reasons.map(r => MY_HAZARD_REASON_INFO[r].description);
+      if (nearbyHazard.reasonDetail) {
+        checkPoints.push(nearbyHazard.reasonDetail);
+      }
+    }
+
     return (
-      <Card className="h-full bg-white/95 backdrop-blur shadow-lg flex flex-col border-red-200">
+      <Card className={`h-full bg-white/95 backdrop-blur shadow-lg flex flex-col ${isMyPin ? "border-purple-200" : "border-red-200"}`}>
         <CardContent className="flex-1 p-4 flex flex-col">
           {/* 危険地点ヘッダー */}
-          <div className="flex items-center gap-2 mb-3 p-2 bg-red-50 rounded-lg border border-red-200">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+          <div className={`flex items-center gap-2 mb-3 p-2 rounded-lg border ${headerBgColor} ${headerBorderColor}`}>
+            {headerIcon}
             <div className="flex-1">
-              <p className="text-sm font-bold text-red-700">{nearbyHazard.title}</p>
-              <p className="text-xs text-red-600">{nearbyHazard.type}</p>
+              <p className={`text-sm font-bold ${isMyPin ? "text-purple-700" : "text-red-700"}`}>{title}</p>
+              <p className={`text-xs ${isMyPin ? "text-purple-600" : "text-red-600"}`}>{subtitle}</p>
             </div>
           </div>
 
@@ -222,19 +255,21 @@ export const GuidePanelDesktop = memo(function GuidePanelDesktop({
 
           {/* チェックポイント */}
           <div className="flex-1">
-            <p className="text-xs font-bold text-gray-700 mb-2">チェックポイント</p>
+            <p className="text-xs font-bold text-gray-700 mb-2">
+              {isMyPin ? "危険の理由" : "チェックポイント"}
+            </p>
             <div className="space-y-2">
-              {nearbyHazard.checkPoints.map((point, i) => (
+              {checkPoints.map((point, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                   <span className="text-gray-700">{point}</span>
                 </div>
               ))}
             </div>
-            {nearbyHazard.safetyTips && nearbyHazard.safetyTips.length > 0 && (
+            {safetyTips.length > 0 && (
               <div className="mt-3 p-2 bg-green-50 rounded-lg border border-green-200">
                 <p className="text-xs font-bold text-green-700 mb-1">安全のヒント</p>
-                <p className="text-xs text-green-600">{nearbyHazard.safetyTips.join("・")}</p>
+                <p className="text-xs text-green-600">{safetyTips.join("・")}</p>
               </div>
             )}
           </div>

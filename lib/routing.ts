@@ -70,7 +70,7 @@ export function calculateRouteDistance(coordinates: [number, number][]): number 
 /**
  * 2点間のHaversine距離を計算（メートル）
  */
-function haversineDistance(
+export function haversineDistance(
   lat1: number,
   lon1: number,
   lat2: number,

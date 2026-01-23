@@ -59,22 +59,37 @@ school-route-safety/
 │       ├── Map/
 │       │   ├── MapContainer.tsx      # OSM地図表示
 │       │   ├── RouteLayer.tsx        # 経路描画
-│       │   └── HazardMarkers.tsx     # 危険地点マーカー
+│       │   ├── HazardMarkers.tsx     # 危険地点マーカー
+│       │   └── MyHazardMarkers.tsx   # マイ危険ポイントマーカー
 │       ├── StreetView/
 │       │   └── StreetViewPanel.tsx   # Street View表示
 │       ├── Guide/
 │       │   └── SafetyGuidePanel.tsx  # 安全学習ガイド
-│       └── Controls/
-│           ├── RouteControls.tsx     # 経路設定UI
-│           └── TourControls.tsx      # ツアー操作UI
+│       ├── Controls/
+│       │   ├── RouteControls.tsx     # 経路設定UI
+│       │   └── TourControls.tsx      # ツアー操作UI
+│       ├── Desktop/
+│       │   ├── ExplorationMode/      # デスクトップ探検モード
+│       │   └── MyHazardPointMode/    # デスクトップピン設置モード
+│       └── Mobile/
+│           ├── ExplorationMode/      # モバイル探検モード
+│           └── MyHazardPointMode/    # モバイルピン設置モード
 ├── lib/
 │   ├── types.ts                      # 型定義
-│   ├── hazardData.ts                 # 危険地点サンプルデータ
-│   └── routing.ts                    # OSRM連携
+│   ├── hazardData.ts                 # 危険地点サンプルデータ・選別ロジック
+│   ├── routing.ts                    # OSRM連携
+│   ├── useMyHazardPoints.ts          # マイ危険ポイント管理Hook
+│   ├── useMyHazardPointMode.ts       # ピン設置モード状態管理
+│   ├── useExplorationMode.ts         # 探検モード状態管理
+│   └── useTour.ts                    # ツアー状態管理
 ├── components/ui/                    # shadcn/uiコンポーネント
 ├── public/
 │   └── icons/
 ├── __tests__/                        # テストファイル
+│   ├── hazardData.test.ts
+│   ├── hazardSelection.test.ts
+│   ├── myHazardPoints.test.ts
+│   └── routing.test.ts
 └── package.json
 ```
 
@@ -99,16 +114,70 @@ interface Route {
   waypoints: [number, number][];
   hazardPoints: string[];
 }
+
+// マイ危険ポイント（ユーザー設置）
+interface MyHazardPoint {
+  id: string;
+  lat: number;
+  lng: number;
+  reasons: MyHazardReason[];
+  reasonDetail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// マイ危険ポイントの理由
+type MyHazardReason =
+  | 'traffic_heavy'      // 車の交通量が多い
+  | 'narrow_road'        // 道が狭い
+  | 'poor_visibility'    // 見通しが悪い
+  | 'no_sidewalk'        // 歩道がない
+  | 'fast_cars'          // 車のスピードが速い
+  | 'bicycle_danger'     // 自転車が危ない
+  | 'other';             // その他
+
+// 巡回対象
+type TourTarget = 'my_hazard_points' | 'safety_map';
 ```
 
 ## 危険地点タイプとアイコン
 
+### Safety Map（システム提供）
 | type | アイコン | 説明 |
 |------|---------|------|
 | intersection | ⚠️ 黄色三角 | 見通しの悪い交差点 |
 | accident | 🔴 赤丸 | 事故多発エリア |
 | braking | 🟠 橙色 | 急ブレーキ多発地点 |
 | user_report | 💬 吹き出し | ユーザー投稿情報 |
+
+### マイ危険ポイント（ユーザー設置）
+| 色 | サイズ | 説明 |
+|----|--------|------|
+| 紫色（#8B5CF6） | 24px / 32px（選択時） | ユーザーが設置した危険ポイント |
+
+## マイ危険ポイント機能
+
+ユーザーが自分で通学路の危険だと思う場所にピンを設置し、探検モードで巡回できる機能。
+
+### 主要機能
+- **ピン設置**: 地図をクリック/タップして危険地点を登録
+- **理由選択**: 複数の理由から選択（交通量、道幅、見通しなど）
+- **重複防止**: 30m以内に既存ピンがある場合は警告
+- **巡回対象選択**: 探検モードで「マイ危険ポイント」または「Safety Map」を選択
+- **修了証連携**: 完了画面で巡回結果を表示
+
+### ローカルストレージ
+- キー: `my_hazard_points`
+- スキーマバージョン管理によるマイグレーション対応
+- 永続化されたピンはブラウザを閉じても保持
+
+### 探検モードのフェーズ
+1. `idle` - 未開始
+2. `route_setting` - 経路設定中
+3. `target_select` - 巡回対象選択
+4. `touring` - ツアー中
+5. `hazard_stop` - 危険地点で停止
+6. `completed` - 完了
 
 ## サンプルデータ地域
 

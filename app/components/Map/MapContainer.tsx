@@ -13,8 +13,9 @@ import { Waypoint } from "@/lib/types";
 import { WaypointMarkers } from "./WaypointMarkers";
 import { RouteLayer } from "./RouteLayer";
 import { HazardMarkers } from "./HazardMarkers";
+import { MyHazardMarkers } from "./MyHazardMarkers";
 import { CurrentPositionMarker } from "./CurrentPositionMarker";
-import { HazardPoint } from "@/lib/types";
+import { HazardPoint, MyHazardPoint } from "@/lib/types";
 
 // デフォルトのLeafletアイコン設定
 const DefaultIcon = L.icon({
@@ -80,6 +81,13 @@ interface MapContainerComponentProps {
   hazardPoints: HazardPoint[];
   onHazardClick: (hazard: HazardPoint) => void;
   selectedHazardId: string | null;
+  // マイ危険ポイント用プロパティ
+  myHazardPoints?: MyHazardPoint[];
+  onMyHazardPinClick?: (pin: MyHazardPoint) => void;
+  onMyHazardPinEdit?: (pin: MyHazardPoint) => void;
+  onMyHazardPinDelete?: (pin: MyHazardPoint) => void;
+  selectedMyHazardPinId?: string | null;
+  showMyHazardPopup?: boolean;
   // ツアー用プロパティ
   tourPosition?: [number, number] | null;
   tourHeading?: number;
@@ -99,6 +107,12 @@ export default function MapContainerComponent({
   hazardPoints,
   onHazardClick,
   selectedHazardId,
+  myHazardPoints = [],
+  onMyHazardPinClick,
+  onMyHazardPinEdit,
+  onMyHazardPinDelete,
+  selectedMyHazardPinId = null,
+  showMyHazardPopup = true,
   tourPosition,
   tourHeading = 0,
   isTourActive = false,
@@ -158,6 +172,18 @@ export default function MapContainerComponent({
           selectedHazardId={selectedHazardId}
           disabled={isDrawingRoute}
         />
+        {/* マイ危険ポイントマーカー（HazardPointより前面に表示） */}
+        {myHazardPoints.length > 0 && (
+          <MyHazardMarkers
+            myHazardPoints={myHazardPoints}
+            onPinClick={onMyHazardPinClick}
+            onPinEdit={onMyHazardPinEdit}
+            onPinDelete={onMyHazardPinDelete}
+            selectedPinId={selectedMyHazardPinId}
+            disabled={isDrawingRoute}
+            showPopup={showMyHazardPopup}
+          />
+        )}
         {/* ツアー中の現在位置マーカー */}
         {isTourActive && tourPosition && (
           <CurrentPositionMarker
